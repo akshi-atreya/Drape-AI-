@@ -1,4 +1,4 @@
-# Atelier — AI Fashion Personal Shopper
+# Drape — AI Fashion Personal Shopper
 
 A conversational AI stylist MVP: chat with an AI to get complete, budget-aware
 outfits built from a mock multi-retailer catalog, remix them conversationally,

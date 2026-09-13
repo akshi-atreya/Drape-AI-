@@ -17,7 +17,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Atelier — Your AI Personal Shopper",
+  title: "Drape — Your AI Personal Shopper",
   description:
     "Tell me what you're looking for. I'll find the pieces, build the look, and make it yours.",
 };
