@@ -1,26 +1,76 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-ivory: #faf7f2;
+  --color-beige: #efe7da;
+  --color-beige-dark: #ddd0ba;
+  --color-charcoal: #232220;
+  --color-charcoal-soft: #4a463f;
+  --color-gray: #948d81;
+  --color-gray-light: #cfc8ba;
+  --color-accent: #8a3b2c;
+  --color-accent-soft: #c98b76;
+  --color-white: #ffffff;
+
+  --font-serif: var(--font-playfair);
+  --font-sans: var(--font-inter);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-ivory: var(--color-ivory);
+  --color-beige: var(--color-beige);
+  --color-beige-dark: var(--color-beige-dark);
+  --color-charcoal: var(--color-charcoal);
+  --color-charcoal-soft: var(--color-charcoal-soft);
+  --color-gray: var(--color-gray);
+  --color-gray-light: var(--color-gray-light);
+  --color-accent: var(--color-accent);
+  --color-accent-soft: var(--color-accent-soft);
+  --font-serif: var(--font-serif);
+  --font-sans: var(--font-sans);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: light;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-ivory);
+  color: var(--color-charcoal);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
+
+h1, h2, h3, .font-serif {
+  font-family: var(--font-serif);
+  letter-spacing: -0.01em;
+}
+
+::selection {
+  background: var(--color-accent-soft);
+  color: var(--color-white);
+}
+
+/* Subtle, restrained motion */
+@keyframes fade-slide-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-in {
+  animation: fade-slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes gentle-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.animate-pulse-slow {
+  animation: gentle-pulse 1.6s ease-in-out infinite;
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
