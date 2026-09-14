@@ -47,7 +47,15 @@ export async function generateTryOnImage(
   }
 
   const outfitDescription = items.map(describeItem).join(", ");
-  const prompt = `Edit this photo so the person is wearing the following complete outfit: ${outfitDescription}. Keep the person's face, identity, body shape, pose, and the background exactly as they are in the original photo — only change their clothing to match this outfit. Make the result look like a natural, realistic, well-lit fashion photo, not a collage or illustration.`;
+  const prompt = `Using the person in the reference photo, generate a NEW full-body fashion photo of them wearing this complete outfit: ${outfitDescription}.
+
+Requirements:
+- Keep their face, skin tone, hair, and identity clearly recognizable and consistent with the reference photo.
+- Show the ENTIRE outfit from head to toe — full body, feet included, vertical portrait framing, nothing cropped.
+- Pose them standing naturally like a fashion model or lookbook photo: relaxed, upright, facing the camera or in a natural three-quarter turn — NOT the pose/crop/angle from the reference photo.
+- If the reference photo is only a headshot, close-up, or partial body, invent a plausible, proportionate full body for them and continue the same face/identity onto it.
+- Use a clean, neutral studio or softly lit indoor background — not the reference photo's original background.
+- The result must look like a single realistic photograph (not a collage, sketch, or illustration), well-lit, in sharp focus.`;
 
   const ai = new GoogleGenAI({ apiKey });
 
@@ -60,6 +68,7 @@ export async function generateTryOnImage(
       ],
       config: {
         responseModalities: ["TEXT", "IMAGE"],
+        imageConfig: { aspectRatio: "3:4" },
       },
     });
 
