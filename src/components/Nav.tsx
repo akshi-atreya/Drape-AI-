@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut, useSession } from "next-auth/react";
 import { useAppStore } from "@/store/useAppStore";
 
 const LINKS = [
@@ -15,6 +16,7 @@ const LINKS = [
 export function Nav() {
   const pathname = usePathname();
   const detectCountry = useAppStore((s) => s.detectCountry);
+  const { data: session, status } = useSession();
 
   useEffect(() => {
     // Region detection only affects which storefront "Shop" links resolve
@@ -42,7 +44,23 @@ export function Nav() {
             </Link>
           ))}
         </div>
-        <button className="text-sm text-gray hover:text-charcoal transition-colors">Sign In</button>
+        {status === "authenticated" ? (
+          <div className="flex items-center gap-3">
+            <span className="hidden sm:inline text-sm text-gray truncate max-w-[160px]">
+              {session.user?.name || session.user?.email}
+            </span>
+            <button
+              onClick={() => signOut({ callbackUrl: "/sign-in" })}
+              className="text-sm text-gray hover:text-charcoal transition-colors"
+            >
+              Sign out
+            </button>
+          </div>
+        ) : (
+          <Link href="/sign-in" className="text-sm text-gray hover:text-charcoal transition-colors">
+            Sign In
+          </Link>
+        )}
       </nav>
     </header>
   );

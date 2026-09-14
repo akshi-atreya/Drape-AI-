@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
+import { SessionProvider } from "next-auth/react";
 import { Nav } from "@/components/Nav";
 import "./globals.css";
 
@@ -26,8 +27,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${playfair.variable} ${inter.variable} h-full`}>
       <body className="min-h-full flex flex-col bg-ivory text-charcoal antialiased">
-        <Nav />
-        <main className="flex-1 flex flex-col">{children}</main>
+        <SessionProvider>
+          <Nav />
+          <main className="flex-1 flex flex-col">{children}</main>
+        </SessionProvider>
       </body>
     </html>
   );
