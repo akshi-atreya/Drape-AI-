@@ -208,14 +208,14 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: "ai-fashion-shopper-store",
+      // Chat (messages/outfits/chatStarted) is intentionally NOT persisted —
+      // every login or page load should start a fresh conversation. Saved
+      // looks, wardrobe, style profile, and region are durable per-browser
+      // preferences and do persist.
       partialize: (s) => ({
         profile: s.profile,
         wardrobe: s.wardrobe,
         savedLooks: s.savedLooks,
-        messages: s.messages,
-        outfitOrder: s.outfitOrder,
-        outfitsById: s.outfitsById,
-        chatStarted: s.chatStarted,
         countryCode: s.countryCode,
         countryCodeManuallySet: s.countryCodeManuallySet,
       }),
