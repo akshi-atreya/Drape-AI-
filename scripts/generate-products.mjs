@@ -197,12 +197,19 @@ const TARGETS = {
   Men: { Tops: 26, Bottoms: 24, Jackets: 20, Shoes: 24, Bags: 14, Accessories: 14 },
 };
 
+// Aritzia doesn't sell menswear in real life — excluded from the men's pool
+// so "Shop" links never point to a nonexistent Aritzia men's section.
+const RETAILERS_BY_GENDER = {
+  Women: Object.keys(RETAILERS),
+  Men: Object.keys(RETAILERS).filter((r) => r !== "Aritzia"),
+};
+
 for (const gender of ["Women", "Men"]) {
   const defsForGender = CATEGORY_DEFS[gender];
   for (const [category, count] of Object.entries(TARGETS[gender])) {
     const def = defsForGender[category];
     for (let i = 0; i < count; i++) {
-      const retailerName = pick(Object.keys(RETAILERS));
+      const retailerName = pick(RETAILERS_BY_GENDER[gender]);
       const retailer = RETAILERS[retailerName];
       const brand = pick(retailer.brands);
       const subcategory = pick(def.subcategories);

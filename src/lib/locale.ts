@@ -1,4 +1,4 @@
-import { Product } from "@/lib/types";
+import { Gender, Product } from "@/lib/types";
 
 /**
  * Regional "shop" links.
@@ -57,24 +57,63 @@ const REGION_PATHS: Record<CountryCode, RegionPaths> = {
   FR: { zara: "fr/fr", hm: "fr_fr", mango: "fr/fr", aritzia: "us/en", asos: "fr" },
 };
 
+/**
+ * Per-retailer gender scoping, verified live against each site:
+ * - Zara:      ?section=MAN|WOMAN
+ * - H&M:       &department=men_all|ladies_all
+ * - Mango:     /search/men|women (path segment, not "women" hardcoded)
+ * - Nordstrom: &filterByGenderAge=men|women
+ * - ASOS:      &refine=floor:1001,2001 scopes to men+unisex; the plain
+ *              (unscoped) search already defaults to women's results, so
+ *              no param is added for Women.
+ * - Aritzia:   no menswear line at all — excluded from the men's retailer
+ *              pool at catalog-generation time, so this case shouldn't be
+ *              hit for a Men product, but falls back to the unscoped
+ *              search (still correct for Women/Unisex) rather than a
+ *              nonexistent men's URL.
+ */
+// Mango's search requires a department path segment (no bare endpoint), so
+// Unisex falls back to "women" rather than breaking the link.
+function mangoSection(gender: Gender): string {
+  return gender === "Men" ? "men" : "women";
+}
+// H&M has no distinct "unisex" department facet — leave Unisex unscoped
+// (shows the "ALL" tab) rather than mis-filing it under either gender.
+function hmDepartment(gender: Gender): string | null {
+  if (gender === "Men") return "men_all";
+  if (gender === "Women") return "ladies_all";
+  return null;
+}
+// Nordstrom's own gender filter genuinely includes "Unisex" as an option.
+function nordstromGenderParam(gender: Gender): string {
+  if (gender === "Men") return "men";
+  if (gender === "Women") return "women";
+  return "unisex";
+}
+
 /** Builds a real, working search-results URL for a product on its retailer's site. */
 export function getShopUrl(product: Product, country: CountryCode = "US"): string {
   const paths = REGION_PATHS[country] ?? REGION_PATHS.US;
   const term = encodeURIComponent(product.name);
+  const gender = product.gender;
 
   switch (product.retailer) {
-    case "Zara":
-      return `https://www.zara.com/${paths.zara}/search?searchTerm=${term}`;
-    case "H&M":
-      return `https://www2.hm.com/${paths.hm}/search-results.html?q=${term}`;
+    case "Zara": {
+      const section = gender === "Men" ? "MAN" : gender === "Women" ? "WOMAN" : null;
+      return `https://www.zara.com/${paths.zara}/search?searchTerm=${term}${section ? `&section=${section}` : ""}`;
+    }
+    case "H&M": {
+      const dept = hmDepartment(gender);
+      return `https://www2.hm.com/${paths.hm}/search-results.html?q=${term}${dept ? `&department=${dept}` : ""}`;
+    }
     case "Mango":
-      return `https://shop.mango.com/${paths.mango}/search/women?q=${term}`;
+      return `https://shop.mango.com/${paths.mango}/search/${mangoSection(gender)}?q=${term}`;
     case "Aritzia":
       return `https://www.aritzia.com/${paths.aritzia}/search?q=${term}`;
     case "Nordstrom":
-      return `https://www.nordstrom.com/sr?origin=keywordsearch&keyword=${term}`;
+      return `https://www.nordstrom.com/sr?origin=keywordsearch&keyword=${term}&filterByGenderAge=${nordstromGenderParam(gender)}`;
     case "ASOS":
-      return `https://www.asos.com/${paths.asos}/search/?q=${term}`;
+      return `https://www.asos.com/${paths.asos}/search/?q=${term}${gender !== "Women" ? "&refine=floor:1001,2001" : ""}`;
     default:
       return product.productUrl;
   }
