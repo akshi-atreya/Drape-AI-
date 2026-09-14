@@ -78,6 +78,20 @@ export async function generateTryOnImage(
     };
   } catch (err) {
     console.error("Try-on generation error:", err);
+    const message = err instanceof Error ? err.message : String(err);
+
+    if (message.includes("RESOURCE_EXHAUSTED") || message.includes('"code":429')) {
+      return {
+        error:
+          "Your Gemini API key doesn't have free-tier quota for the image model (gemini-3.1-flash-image) — it needs billing enabled on the Google AI Studio / Cloud project the key belongs to. Enable billing at aistudio.google.com, then try again.",
+      };
+    }
+    if (message.includes('"code":403') || message.includes("PERMISSION_DENIED")) {
+      return { error: "That Gemini API key doesn't have access to the image model. Check the key's permissions in Google AI Studio." };
+    }
+    if (message.includes('"code":404') || message.includes("NOT_FOUND")) {
+      return { error: "The image model isn't available for this API key/region yet." };
+    }
     return { error: "Something went wrong generating your try-on image. Please try again." };
   }
 }
