@@ -1,22 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
+import { generateTryOnImage } from "@/lib/tryon-provider";
+import { OutfitItem } from "@/lib/types";
 
 export const runtime = "nodejs";
 
+interface TryOnRequestBody {
+  photoDataUrl: string;
+  items: OutfitItem[];
+}
+
 /**
- * Virtual try-on integration abstraction.
- *
- * MVP: no real garment-compositing model is wired up — the UI renders an
- * honest "style preview" (photo + outfit pieces) instead of a fabricated
- * generated image. This endpoint exists as the seam where a real try-on
- * model/API would be called:
- *
- *   const result = await tryOnProvider.generate({ photoDataUrl, productImageUrls });
- *   return NextResponse.json({ resultDataUrl: result.imageUrl, isSimulated: false });
+ * Real virtual try-on, backed by Gemini's image model (see
+ * src/lib/tryon-provider.ts). Requires GEMINI_API_KEY in .env.local.
  */
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => ({}));
-  if (!body?.outfitId) {
-    return NextResponse.json({ error: "outfitId is required" }, { status: 400 });
+  let body: TryOnRequestBody;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
-  return NextResponse.json({ ok: true, isSimulated: true });
+
+  if (!body?.photoDataUrl || !Array.isArray(body.items)) {
+    return NextResponse.json({ error: "photoDataUrl and items are required" }, { status: 400 });
+  }
+
+  const result = await generateTryOnImage(body.photoDataUrl, body.items);
+  if (result.error) {
+    return NextResponse.json({ error: result.error }, { status: 502 });
+  }
+  return NextResponse.json({ imageDataUrl: result.imageDataUrl });
 }
