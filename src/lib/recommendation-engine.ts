@@ -1,6 +1,7 @@
 import { v4 as uuid } from "uuid";
 import {
   Category,
+  Gender,
   Outfit,
   OutfitItem,
   Product,
@@ -19,6 +20,8 @@ import {
  */
 
 export interface OutfitRequest {
+  /** Who to shop for. Null means unknown — callers should ask before generating outfits. */
+  gender: Gender | null;
   budget: number | null;
   occasion: string | null;
   locationHint: string | null;
@@ -34,6 +37,7 @@ export interface OutfitRequest {
 }
 
 export const defaultOutfitRequest: OutfitRequest = {
+  gender: null,
   budget: null,
   occasion: null,
   locationHint: null,
@@ -156,6 +160,7 @@ export function scoreProduct(product: Product, req: OutfitRequest): ScoredProduc
 function filterCatalog(catalog: Product[], req: OutfitRequest): Product[] {
   return catalog.filter((p) => {
     if (!p.availability) return false;
+    if (req.gender && p.gender !== req.gender && p.gender !== "Unisex") return false;
     if (req.brandsAvoid.some((b) => p.brand.toLowerCase().includes(b.toLowerCase()) || p.retailer.toLowerCase().includes(b.toLowerCase()))) {
       return false;
     }
@@ -267,10 +272,17 @@ export function summarizeNotableTags(items: OutfitItem[]): { colors: string[]; t
 
 export function generateOutfits(catalog: Product[], req: OutfitRequest): Outfit[] {
   const filtered = filterCatalog(catalog, req);
+  // The mock catalog has no menswear dresses — drop dress-based recipes
+  // entirely rather than building outfits with a hole where the main piece
+  // should be. Otherwise alternate dress/separates recipes for variety,
+  // leading with whichever the style profile prefers.
   const preferDress = req.styleTags.includes("Feminine") || req.styleTags.includes("Romantic");
-  const orderedRecipes = preferDress
-    ? [RECIPES[2], RECIPES[0], RECIPES[3], RECIPES[1]]
-    : [RECIPES[0], RECIPES[2], RECIPES[1], RECIPES[3]];
+  const orderedRecipes =
+    req.gender === "Men"
+      ? [RECIPES[0], RECIPES[1]] // separates-jacket, separates-light
+      : preferDress
+      ? [RECIPES[2], RECIPES[0], RECIPES[3], RECIPES[1]]
+      : [RECIPES[0], RECIPES[2], RECIPES[1], RECIPES[3]];
 
   const outfits: Outfit[] = [];
   const globallyUsed = new Set<string>();

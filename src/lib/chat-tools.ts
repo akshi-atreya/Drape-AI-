@@ -1,6 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import {
   CATEGORIES,
+  GENDERS,
+  Gender,
   OCCASION_TAGS,
   Outfit,
   SEASON_TAGS,
@@ -29,6 +31,7 @@ export const toolDefinitions: Anthropic.Tool[] = [
     input_schema: {
       type: "object",
       properties: {
+        gender: { type: "string", enum: GENDERS, description: "Who you're shopping for." },
         styles: { type: "array", items: { type: "string", enum: STYLE_TAGS } },
         trendLevel: { type: "number", minimum: 0, maximum: 1, description: "0 = classic, 1 = trendsetter" },
         colorsLike: { type: "array", items: { type: "string" } },
@@ -45,10 +48,11 @@ export const toolDefinitions: Anthropic.Tool[] = [
   {
     name: "find_outfits",
     description:
-      "Search the product catalog and construct complete, budget-aware outfits (not isolated items) for the user's current request. Only call this once you know enough to make a good outfit (typically budget + occasion or explicit request).",
+      "Search the product catalog and construct complete, budget-aware outfits (not isolated items) for the user's current request. Requires knowing who you're shopping for (gender) — ask that first if it hasn't come up yet, don't guess. Only call this once you know enough to make a good outfit (gender + typically budget + occasion or explicit request).",
     input_schema: {
       type: "object",
       properties: {
+        gender: { type: "string", enum: GENDERS, description: "Who you're shopping for. Required unless already known from the profile." },
         budget: { type: ["number", "null"], description: "Total budget in USD for the whole outfit, if known." },
         occasion: { type: ["string", "null"] },
         locationHint: { type: ["string", "null"], description: "City/trip mentioned by the user, e.g. 'NYC', 'Paris'." },
@@ -124,7 +128,19 @@ export function executeTool(
   }
 
   if (name === "find_outfits") {
+    const gender = (input.gender as Gender | undefined) ?? ctx.profile.gender;
+    if (!gender) {
+      return {
+        error:
+          "Gender is not known yet. Do not call find_outfits — instead ask the user who you're shopping for (women's, men's, or no preference) via respond_to_user.",
+      };
+    }
+    if (!ctx.profile.gender) {
+      ctx.profile = mergeProfile(ctx.profile, { gender });
+    }
+
     const req = profileToOutfitRequest(ctx.profile, {
+      gender,
       budget: (input.budget as number | null) ?? null,
       occasion: (input.occasion as string | null) ?? null,
       locationHint: (input.locationHint as string | null) ?? null,
@@ -197,6 +213,7 @@ export const SYSTEM_PROMPT = `You are the AI personal stylist for a premium fash
 
 Core rules:
 - Ask only the questions that matter, one or two at a time, never a long questionnaire. If the user already gave enough info (e.g. budget + occasion), don't ask more — go straight to find_outfits.
+- You must know who you're shopping for (women's, men's, or no preference) before calling find_outfits. If it isn't already known (check the profile / conversation) and the user's message doesn't make it obvious, ask a single natural question for it first — e.g. "Who are we shopping for — you, or a gift for someone?" or "Are you after menswear or womenswear for this?" — before anything else, even before budget. Once you learn it, call update_style_profile with it. Never guess or default this silently.
 - Build complete outfits, never isolated single-item recommendations, unless the user explicitly asks for one item.
 - Respect budget strictly. The recommendation engine handles the math; you never need to compute prices yourself.
 - When the user states a lasting preference (style, disliked colors/brands, fit), call update_style_profile.

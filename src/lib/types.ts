@@ -20,6 +20,9 @@ export type Retailer =
   | "Nordstrom"
   | "ASOS";
 
+/** Who a product/outfit is designed for. "Unisex" items are shown to either. */
+export type Gender = "Women" | "Men" | "Unisex";
+
 export type StyleTag =
   | "Minimal"
   | "Classic"
@@ -64,6 +67,8 @@ export const RETAILERS: Retailer[] = [
   "Zara", "H&M", "Mango", "Aritzia", "Nordstrom", "ASOS",
 ];
 
+export const GENDERS: Gender[] = ["Women", "Men", "Unisex"];
+
 export const STYLE_TAGS: StyleTag[] = [
   "Minimal", "Classic", "Feminine", "Streetwear", "Boho", "Sporty",
   "Romantic", "Edgy", "Preppy", "Quiet Luxury",
@@ -84,6 +89,7 @@ export interface Product {
   id: string;
   retailer: Retailer;
   brand: string;
+  gender: Gender;
   name: string;
   category: Category;
   subcategory: string;
@@ -110,6 +116,8 @@ export interface Product {
 export type TrendLevel = number; // 0 (classic) .. 1 (trendsetter)
 
 export interface StyleProfile {
+  /** Who the stylist is shopping for. Null = not yet asked. */
+  gender: Gender | null;
   styles: StyleTag[];
   trendLevel: TrendLevel;
   colorsLike: string[];
@@ -124,6 +132,7 @@ export interface StyleProfile {
 }
 
 export const emptyStyleProfile: StyleProfile = {
+  gender: null,
   styles: [],
   trendLevel: 0.5,
   colorsLike: [],

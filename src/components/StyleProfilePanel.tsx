@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { CATEGORIES, OCCASION_TAGS, STYLE_TAGS } from "@/lib/types";
+import { CATEGORIES, GENDERS, OCCASION_TAGS, STYLE_TAGS } from "@/lib/types";
 import { useAppStore } from "@/store/useAppStore";
 import { TagToggleGroup } from "@/components/TagToggleGroup";
 import { TagListInput } from "@/components/TagListInput";
@@ -32,6 +32,17 @@ export function StyleProfilePanel() {
       <p className="text-sm text-gray">
         Your stylist learns these automatically as you chat — adjust anything directly here.
       </p>
+
+      <Field label="Shopping for">
+        <TagToggleGroup
+          options={GENDERS}
+          selected={profile.gender ? [profile.gender] : []}
+          onToggle={(v) => updateProfile({ gender: profile.gender === v ? null : v })}
+        />
+        <p className="text-xs text-gray mt-1.5">
+          Your stylist asks this in chat if it doesn&apos;t know yet — set it here to skip that question.
+        </p>
+      </Field>
 
       <Field label="Shopping region">
         <select

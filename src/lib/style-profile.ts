@@ -4,6 +4,7 @@ import { OutfitRequest, defaultOutfitRequest } from "@/lib/recommendation-engine
 /** Merges partial updates the LLM extracted from conversation into a profile. */
 export function mergeProfile(base: StyleProfile, patch: Partial<StyleProfile>): StyleProfile {
   return {
+    gender: patch.gender ?? base.gender,
     styles: patch.styles?.length ? [...new Set([...base.styles, ...patch.styles])] : base.styles,
     trendLevel: patch.trendLevel != null ? patch.trendLevel : base.trendLevel,
     colorsLike: patch.colorsLike?.length ? [...new Set([...base.colorsLike, ...patch.colorsLike])] : base.colorsLike,
@@ -25,6 +26,7 @@ export function profileToOutfitRequest(
 ): OutfitRequest {
   return {
     ...defaultOutfitRequest,
+    gender: turn.gender ?? profile.gender,
     styleTags: turn.styleTags?.length ? turn.styleTags : profile.styles,
     trendLevel: turn.trendLevel ?? profile.trendLevel,
     colorsLike: [...profile.colorsLike, ...(turn.colorsLike ?? [])],
