@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAppStore } from "@/store/useAppStore";
 
 const LINKS = [
   { href: "/", label: "Discover" },
@@ -12,6 +14,15 @@ const LINKS = [
 
 export function Nav() {
   const pathname = usePathname();
+  const detectCountry = useAppStore((s) => s.detectCountry);
+
+  useEffect(() => {
+    // Region detection only affects which storefront "Shop" links resolve
+    // to — safe to run once, no permission prompt (reads navigator.language,
+    // not geolocation).
+    detectCountry();
+  }, [detectCountry]);
+
   return (
     <header className="sticky top-0 z-30 bg-ivory/90 backdrop-blur-sm border-b border-beige-dark/50">
       <nav className="max-w-6xl mx-auto flex items-center justify-between px-6 md:px-10 h-16">

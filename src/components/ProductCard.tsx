@@ -1,11 +1,16 @@
+"use client";
+
 import { Product } from "@/lib/types";
 import { ProductSwatch } from "@/components/ProductSwatch";
+import { useAppStore } from "@/store/useAppStore";
+import { getShopUrl } from "@/lib/locale";
 
 export function ProductCard({ product }: { product: Product }) {
+  const countryCode = useAppStore((s) => s.countryCode);
   const price = product.salePrice ?? product.price;
   return (
     <a
-      href={product.productUrl}
+      href={getShopUrl(product, countryCode)}
       target="_blank"
       rel="noopener noreferrer"
       className="group block"

@@ -4,12 +4,14 @@ import { useRouter } from "next/navigation";
 import { SavedLook } from "@/lib/types";
 import { ProductSwatch } from "@/components/ProductSwatch";
 import { useAppStore } from "@/store/useAppStore";
+import { getShopUrl } from "@/lib/locale";
 
 export function SavedLookCard({ look }: { look: SavedLook }) {
   const removeSavedLook = useAppStore((s) => s.removeSavedLook);
   const router = useRouter();
   const sendMessage = useAppStore((s) => s.sendMessage);
   const reviveOutfit = useAppStore((s) => s.reviveOutfit);
+  const countryCode = useAppStore((s) => s.countryCode);
 
   if (look.type === "outfit" && look.outfit) {
     const outfit = look.outfit;
@@ -39,14 +41,16 @@ export function SavedLookCard({ look }: { look: SavedLook }) {
             >
               Remix
             </button>
-            <a
-              href={outfit.items[0]?.product.productUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3.5 py-1.5 rounded-full border border-beige-dark text-xs hover:border-charcoal"
-            >
-              Shop
-            </a>
+            {outfit.items[0] && (
+              <a
+                href={getShopUrl(outfit.items[0].product, countryCode)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3.5 py-1.5 rounded-full border border-beige-dark text-xs hover:border-charcoal"
+              >
+                Shop
+              </a>
+            )}
             <button
               onClick={() => removeSavedLook(look.id)}
               className="px-3.5 py-1.5 rounded-full border border-beige-dark text-xs text-accent hover:border-accent"

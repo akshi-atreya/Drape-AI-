@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Image from "next/image";
 import { Outfit } from "@/lib/types";
 import { ProductSwatch } from "@/components/ProductSwatch";
 import { useAppStore } from "@/store/useAppStore";
@@ -94,15 +93,12 @@ export function TryOnModal({
 
             {photo && stage === "upload" && (
               <div className="space-y-4">
-                <div className="relative mx-auto w-full max-w-sm h-[420px]">
-                  <Image
-                    src={photo}
-                    alt="Uploaded"
-                    fill
-                    unoptimized
-                    className="rounded-2xl object-cover"
-                  />
-                </div>
+                {/* eslint-disable-next-line @next/next/no-img-element -- user-uploaded data: URL, not a static/remote asset next/image can optimize */}
+                <img
+                  src={photo}
+                  alt="Uploaded"
+                  className="mx-auto w-full max-w-sm h-[420px] rounded-2xl object-cover"
+                />
                 <button
                   onClick={generate}
                   className="px-6 py-3 rounded-full bg-charcoal text-ivory text-sm hover:bg-charcoal-soft transition-colors"
@@ -121,13 +117,12 @@ export function TryOnModal({
 
             {stage === "done" && photo && (
               <div className="space-y-6">
-                <div className="relative mx-auto w-full max-w-sm h-[420px]">
-                  <Image
+                <div className="relative mx-auto w-full max-w-sm">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- user-uploaded data: URL, not a static/remote asset next/image can optimize */}
+                  <img
                     src={photo}
                     alt="Try-on preview"
-                    fill
-                    unoptimized
-                    className="rounded-2xl object-cover"
+                    className="w-full h-[420px] rounded-2xl object-cover"
                   />
                   <span className="absolute top-3 left-3 bg-ivory/90 text-charcoal text-[11px] tracking-wide uppercase px-2.5 py-1 rounded-full">
                     Style Preview

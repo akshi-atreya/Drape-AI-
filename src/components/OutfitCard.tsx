@@ -5,6 +5,7 @@ import { Outfit } from "@/lib/types";
 import { ProductSwatch } from "@/components/ProductSwatch";
 import { BudgetIndicator } from "@/components/BudgetIndicator";
 import { useAppStore } from "@/store/useAppStore";
+import { getShopUrl } from "@/lib/locale";
 
 const REMIX_CHIPS = [
   "Make it more casual",
@@ -26,6 +27,7 @@ export function OutfitCard({
   const remix = useAppStore((s) => s.remix);
   const saveLook = useAppStore((s) => s.saveLook);
   const loading = useAppStore((s) => s.loading);
+  const countryCode = useAppStore((s) => s.countryCode);
   const [remixOpen, setRemixOpen] = useState(false);
   const [remixText, setRemixText] = useState("");
   const [justSaved, setJustSaved] = useState(false);
@@ -88,7 +90,7 @@ export function OutfitCard({
                     )}
                   </p>
                   <a
-                    href={it.product.productUrl}
+                    href={getShopUrl(it.product, countryCode)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs text-accent hover:underline"

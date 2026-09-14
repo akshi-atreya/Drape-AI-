@@ -11,6 +11,7 @@ import {
   StyleProfile,
   WardrobeItem,
 } from "@/lib/types";
+import { CountryCode, detectCountryFromLocale } from "@/lib/locale";
 
 interface ChatApiOutfitResult {
   outfit: Outfit;
@@ -26,6 +27,8 @@ interface AppState {
   outfitsById: Record<string, Outfit>;
   wardrobe: WardrobeItem[];
   savedLooks: SavedLook[];
+  countryCode: CountryCode;
+  countryCodeManuallySet: boolean;
   loading: boolean;
   error: string | null;
 
@@ -34,6 +37,8 @@ interface AppState {
   remix: (outfitId: string, instruction: string) => Promise<void>;
   updateProfile: (patch: Partial<StyleProfile>) => void;
   reviveOutfit: (outfit: Outfit) => void;
+  detectCountry: () => void;
+  setCountryCode: (country: CountryCode) => void;
   addWardrobeItem: (item: Omit<WardrobeItem, "id" | "addedAt">) => void;
   removeWardrobeItem: (id: string) => void;
   saveLook: (look: Omit<SavedLook, "id" | "savedAt">) => void;
@@ -72,6 +77,8 @@ export const useAppStore = create<AppState>()(
       outfitsById: {},
       wardrobe: [],
       savedLooks: [],
+      countryCode: "US",
+      countryCodeManuallySet: false,
       loading: false,
       error: null,
 
@@ -153,6 +160,10 @@ export const useAppStore = create<AppState>()(
 
       updateProfile: (patch) => set((s) => ({ profile: { ...s.profile, ...patch } })),
 
+      detectCountry: () =>
+        set((s) => (s.countryCodeManuallySet ? {} : { countryCode: detectCountryFromLocale() })),
+      setCountryCode: (country) => set({ countryCode: country, countryCodeManuallySet: true }),
+
       reviveOutfit: (outfit) =>
         set((s) => ({
           chatStarted: true,
@@ -205,6 +216,8 @@ export const useAppStore = create<AppState>()(
         outfitOrder: s.outfitOrder,
         outfitsById: s.outfitsById,
         chatStarted: s.chatStarted,
+        countryCode: s.countryCode,
+        countryCodeManuallySet: s.countryCodeManuallySet,
       }),
     }
   )

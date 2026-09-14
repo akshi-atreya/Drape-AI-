@@ -5,6 +5,9 @@ import { CATEGORIES, OCCASION_TAGS, STYLE_TAGS } from "@/lib/types";
 import { useAppStore } from "@/store/useAppStore";
 import { TagToggleGroup } from "@/components/TagToggleGroup";
 import { TagListInput } from "@/components/TagListInput";
+import { COUNTRY_LABELS, CountryCode } from "@/lib/locale";
+
+const COUNTRY_OPTIONS = Object.keys(COUNTRY_LABELS) as CountryCode[];
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -18,6 +21,8 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 export function StyleProfilePanel() {
   const profile = useAppStore((s) => s.profile);
   const updateProfile = useAppStore((s) => s.updateProfile);
+  const countryCode = useAppStore((s) => s.countryCode);
+  const setCountryCode = useAppStore((s) => s.setCountryCode);
 
   const toggle = <T extends string>(list: T[], value: T) =>
     list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
@@ -27,6 +32,24 @@ export function StyleProfilePanel() {
       <p className="text-sm text-gray">
         Your stylist learns these automatically as you chat — adjust anything directly here.
       </p>
+
+      <Field label="Shopping region">
+        <select
+          value={countryCode}
+          onChange={(e) => setCountryCode(e.target.value as CountryCode)}
+          className="text-sm bg-beige/50 rounded-full px-4 py-2 outline-none"
+        >
+          {COUNTRY_OPTIONS.map((c) => (
+            <option key={c} value={c}>
+              {COUNTRY_LABELS[c]}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-gray mt-1.5">
+          We guessed this from your browser — change it if it&apos;s wrong. It decides which
+          storefront &quot;Shop&quot; links send you to.
+        </p>
+      </Field>
 
       <Field label="Style">
         <TagToggleGroup
