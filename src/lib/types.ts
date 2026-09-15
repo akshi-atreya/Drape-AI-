@@ -47,6 +47,16 @@ export type OccasionTag =
 
 export type SeasonTag = "Spring" | "Summer" | "Fall" | "Winter" | "All Season";
 
+/** How dressy a piece reads, ordered low -> high. Drives occasion fit. */
+export type Formality = "Casual" | "Smart Casual" | "Dressy" | "Formal";
+export const FORMALITY_LEVELS: Formality[] = ["Casual", "Smart Casual", "Dressy", "Formal"];
+export const FORMALITY_ORDER: Record<Formality, number> = {
+  Casual: 0,
+  "Smart Casual": 1,
+  Dressy: 2,
+  Formal: 3,
+};
+
 export type TrendTag =
   | "Burgundy"
   | "Suede"
@@ -106,6 +116,7 @@ export interface Product {
   material: string;
   fit: string;
   silhouette: string;
+  formality: Formality;
   styleTags: StyleTag[];
   occasionTags: OccasionTag[];
   seasonTags: SeasonTag[];

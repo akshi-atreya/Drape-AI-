@@ -149,6 +149,53 @@ const CATEGORY_DEFS = {
   },
 };
 
+// How dressy each subcategory actually reads. This is the ground truth that
+// occasion recommendations are built on — without it, occasion tags were
+// assigned at random and "Wedding Guest" was just as likely to surface
+// cargo pants as a silk dress.
+const FORMALITY_BY_SUBCATEGORY = {
+  Women: {
+    "T-Shirt": "Casual", "Knit Top": "Smart Casual", "Blouse": "Dressy", "Button-Down Shirt": "Smart Casual", "Bodysuit": "Dressy", "Turtleneck": "Smart Casual",
+    "Straight Jeans": "Casual", "Wide-Leg Trousers": "Smart Casual", "Tailored Pants": "Dressy", "Midi Skirt": "Dressy", "Mini Skirt": "Smart Casual", "Pleated Skirt": "Smart Casual",
+    "Slip Dress": "Dressy", "Wrap Dress": "Dressy", "Midi Dress": "Dressy", "Shirt Dress": "Smart Casual", "Knit Dress": "Smart Casual",
+    "Denim Jacket": "Casual", "Suede Jacket": "Smart Casual", "Blazer": "Dressy", "Trench Coat": "Smart Casual", "Leather Jacket": "Casual", "Wool Coat": "Dressy",
+    "Sneakers": "Casual", "Ballet Flats": "Smart Casual", "Loafers": "Smart Casual", "Ankle Boots": "Smart Casual", "Knee-High Boots": "Smart Casual", "Heeled Sandals": "Formal",
+    "Tote": "Casual", "Crossbody Bag": "Casual", "Shoulder Bag": "Smart Casual", "Clutch": "Formal",
+    "Belt": "Smart Casual", "Silk Scarf": "Dressy", "Sunglasses": "Casual", "Jewelry Set": "Formal", "Wide-Brim Hat": "Smart Casual",
+  },
+  Men: {
+    "T-Shirt": "Casual", "Henley": "Casual", "Flannel Shirt": "Casual", "Polo Shirt": "Smart Casual", "Button-Down Shirt": "Dressy", "Turtleneck": "Smart Casual",
+    "Cargo Pants": "Casual", "Straight Jeans": "Casual", "Chinos": "Smart Casual", "Tailored Trousers": "Formal", "Shorts": "Casual", "Wide-Leg Trousers": "Smart Casual",
+    "Bomber Jacket": "Casual", "Denim Jacket": "Casual", "Overshirt": "Casual", "Leather Jacket": "Casual", "Blazer": "Formal", "Wool Coat": "Dressy",
+    "Sneakers": "Casual", "Sandals": "Casual", "Chukka Boots": "Smart Casual", "Chelsea Boots": "Smart Casual", "Derby Shoes": "Formal", "Loafers": "Dressy",
+    "Backpack": "Casual", "Messenger Bag": "Smart Casual", "Tote": "Casual", "Crossbody Bag": "Casual",
+    "Belt": "Smart Casual", "Sunglasses": "Casual", "Cap": "Casual", "Watch": "Dressy", "Beanie": "Casual",
+  },
+};
+
+// Occasions plausible at each formality level (mirrors OCCASION_TARGET_FORMALITY
+// in the recommendation engine, so generated tags line up with how the
+// engine actually filters/scores).
+const OCCASIONS_BY_FORMALITY = {
+  Casual: ["Everyday", "Weekend", "Travel", "Vacation"],
+  "Smart Casual": ["Everyday", "Work", "Date Night", "Weekend"],
+  Dressy: ["Date Night", "Work", "Party", "Wedding Guest"],
+  Formal: ["Wedding Guest", "Party", "Date Night"],
+};
+
+function deriveOccasionTags(formality, category, subcategory) {
+  const tags = new Set(pickN(OCCASIONS_BY_FORMALITY[formality], 1 + Math.floor(rand() * 2)));
+  // A few subcategory-specific nudges that formality alone doesn't capture.
+  if (["Shorts", "Sandals", "Heeled Sandals", "Sunglasses", "Wide-Brim Hat"].includes(subcategory) && chance(0.6)) {
+    tags.add("Vacation");
+  }
+  if (category === "Dresses" && (formality === "Dressy" || formality === "Formal") && chance(0.5)) {
+    tags.add(pick(["Wedding Guest", "Date Night", "Party"]));
+  }
+  if (subcategory === "Blazer" && chance(0.5)) tags.add("Work");
+  return [...tags].slice(0, 3);
+}
+
 const COLORS = [
   "cream", "black", "charcoal", "brown", "burgundy", "olive", "navy",
   "white", "beige", "camel", "blush", "sage", "rust", "ivory",
@@ -223,8 +270,9 @@ for (const gender of ["Women", "Men"]) {
       const onSale = chance(0.25);
       const salePrice = onSale ? round2(price * (1 - (0.15 + rand() * 0.25))) : null;
 
+      const formality = FORMALITY_BY_SUBCATEGORY[gender][subcategory] ?? "Smart Casual";
       const styleTags = pickN(STYLE_TAGS, 1 + Math.floor(rand() * 2));
-      const occasionTags = pickN(OCCASION_TAGS, 1 + Math.floor(rand() * 2));
+      const occasionTags = deriveOccasionTags(formality, category, subcategory);
       const seasonTags = chance(0.3) ? ["All Season"] : pickN(SEASON_TAGS.filter((s) => s !== "All Season"), 1 + Math.floor(rand() * 2));
       const trendTags = deriveTrendTags(color, subcategory, material);
       const trendScores = {};
@@ -273,6 +321,7 @@ for (const gender of ["Women", "Men"]) {
         material,
         fit,
         silhouette,
+        formality,
         styleTags,
         occasionTags,
         seasonTags,

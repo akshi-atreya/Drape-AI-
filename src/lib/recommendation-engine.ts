@@ -1,13 +1,42 @@
 import { v4 as uuid } from "uuid";
 import {
   Category,
+  FORMALITY_ORDER,
   Gender,
+  OCCASION_TAGS,
+  OccasionTag,
   Outfit,
   OutfitItem,
   Product,
   StyleTag,
   TrendTag,
 } from "@/lib/types";
+
+/**
+ * Target formality (see FORMALITY_ORDER: Casual=0 .. Formal=3) for each
+ * canonical occasion, and how strictly we enforce it. This is what actually
+ * differentiates "Wedding Guest" from "Vacation" — without it, occasion was
+ * only a soft tag-match and casual/dressy pieces got recommended for
+ * everything roughly equally.
+ */
+const OCCASION_TARGET_FORMALITY: Record<OccasionTag, number> = {
+  Everyday: 0.3,
+  Weekend: 0.3,
+  Travel: 0.5,
+  Vacation: 0.5,
+  Work: 1.5,
+  "Date Night": 2,
+  Party: 2.2,
+  "Wedding Guest": 2.5,
+};
+const FORMALITY_MATCH_THRESHOLD = 1.4;
+
+/** Case-insensitive match against the canonical OccasionTag list; free text the LLM passes that isn't one of these (e.g. "brunch") returns null. */
+function resolveOccasionTag(occasion: string | null): OccasionTag | null {
+  if (!occasion) return null;
+  const needle = occasion.trim().toLowerCase();
+  return OCCASION_TAGS.find((t) => t.toLowerCase() === needle) ?? null;
+}
 
 /**
  * Deterministic outfit scoring + construction engine.
@@ -128,9 +157,23 @@ export function scoreProduct(product: Product, req: OutfitRequest): ScoredProduc
     color = 0.6;
   }
 
-  // Occasion fit.
+  // Occasion fit: primarily driven by how close the product's formality is
+  // to the occasion's target formality (see OCCASION_TARGET_FORMALITY),
+  // with the product's own occasionTags as a secondary signal. This is what
+  // actually separates "Wedding Guest" (needs Dressy/Formal) from
+  // "Vacation" (needs Casual/Smart Casual) — a plain tag match alone
+  // wasn't a strong enough signal.
   let occasion = 0.5;
-  if (req.occasion) {
+  const resolvedOccasion = resolveOccasionTag(req.occasion);
+  if (resolvedOccasion) {
+    const target = OCCASION_TARGET_FORMALITY[resolvedOccasion];
+    const diff = Math.abs(FORMALITY_ORDER[product.formality] - target);
+    const formalityFit = Math.max(0, 1 - diff / 3);
+    const tagHit = product.occasionTags.includes(resolvedOccasion);
+    occasion = formalityFit * 0.7 + (tagHit ? 1 : 0.5) * 0.3;
+  } else if (req.occasion) {
+    // Free text that isn't one of our canonical occasions (e.g. "brunch") —
+    // fall back to a loose tag-name match.
     const needle = req.occasion.toLowerCase();
     const hit = product.occasionTags.some((t) => t.toLowerCase() === needle || needle.includes(t.toLowerCase()));
     occasion = hit ? 1 : 0.4;
@@ -152,12 +195,15 @@ export function scoreProduct(product: Product, req: OutfitRequest): ScoredProduc
   }
 
   const score =
-    style * 0.3 + color * 0.2 + occasion * 0.2 + trend * 0.2 + brand * 0.1;
+    style * 0.25 + color * 0.15 + occasion * 0.3 + trend * 0.2 + brand * 0.1;
 
   return { product, score, breakdown: { style, color, occasion, trend, brand } };
 }
 
 function filterCatalog(catalog: Product[], req: OutfitRequest): Product[] {
+  const resolvedOccasion = resolveOccasionTag(req.occasion);
+  const formalityTarget = resolvedOccasion ? OCCASION_TARGET_FORMALITY[resolvedOccasion] : null;
+
   return catalog.filter((p) => {
     if (!p.availability) return false;
     if (req.gender && p.gender !== req.gender && p.gender !== "Unisex") return false;
@@ -167,6 +213,10 @@ function filterCatalog(catalog: Product[], req: OutfitRequest): Product[] {
     if (req.season && req.season !== "All Season") {
       const seasonMatch = p.seasonTags.some((t) => t === req.season) || p.seasonTags.includes("All Season");
       if (!seasonMatch) return false;
+    }
+    if (formalityTarget != null) {
+      const diff = Math.abs(FORMALITY_ORDER[p.formality] - formalityTarget);
+      if (diff > FORMALITY_MATCH_THRESHOLD) return false;
     }
     return true;
   });
@@ -272,17 +322,30 @@ export function summarizeNotableTags(items: OutfitItem[]): { colors: string[]; t
 
 export function generateOutfits(catalog: Product[], req: OutfitRequest): Outfit[] {
   const filtered = filterCatalog(catalog, req);
+
   // The mock catalog has no menswear dresses — drop dress-based recipes
   // entirely rather than building outfits with a hole where the main piece
-  // should be. Otherwise alternate dress/separates recipes for variety,
-  // leading with whichever the style profile prefers.
-  const preferDress = req.styleTags.includes("Feminine") || req.styleTags.includes("Romantic");
-  const orderedRecipes =
-    req.gender === "Men"
-      ? [RECIPES[0], RECIPES[1]] // separates-jacket, separates-light
-      : preferDress
-      ? [RECIPES[2], RECIPES[0], RECIPES[3], RECIPES[1]]
-      : [RECIPES[0], RECIPES[2], RECIPES[1], RECIPES[3]];
+  // should be.
+  const availableRecipes = req.gender === "Men" ? RECIPES.filter((r) => !r.roles.includes("Dresses")) : RECIPES;
+
+  const resolvedOccasion = resolveOccasionTag(req.occasion);
+  const formalityTarget = resolvedOccasion ? OCCASION_TARGET_FORMALITY[resolvedOccasion] : null;
+  // A dressy occasion (Wedding Guest, Party, Date Night) leads with a dress
+  // recipe; a low-formality one (Vacation, Weekend, Travel, Everyday) leads
+  // with a jacket-free recipe — a blazer showing up for "vacation" was
+  // exactly the kind of same-y result this fixes.
+  const preferDress =
+    req.styleTags.includes("Feminine") || req.styleTags.includes("Romantic") || (formalityTarget != null && formalityTarget >= 1.8);
+  const preferLight = formalityTarget != null && formalityTarget <= 0.6;
+
+  const orderedRecipes = [...availableRecipes].sort((a, b) => {
+    const priority = (r: Recipe) => {
+      const hasDress = r.roles.includes("Dresses");
+      const hasJacket = r.roles.includes("Jackets");
+      return (hasDress !== preferDress ? 2 : 0) + (hasJacket === preferLight ? 1 : 0);
+    };
+    return priority(a) - priority(b);
+  });
 
   const outfits: Outfit[] = [];
   const globallyUsed = new Set<string>();
