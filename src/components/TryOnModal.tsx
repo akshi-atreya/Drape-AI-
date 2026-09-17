@@ -69,11 +69,41 @@ export function TryOnModal({
     setStage("review");
   };
 
+  // Always re-encode through a canvas into a small, guaranteed-valid JPEG —
+  // never send the raw file bytes on. A phone-camera PNG can be 5-10x the
+  // size of the same photo as JPEG (PNG is lossless/uncompressed), which
+  // was producing multi-MB request bodies that got truncated in transit
+  // (surfacing as "Invalid JSON body") and, since the raw untouched bytes
+  // were also what got rendered as the preview <img>, could show as a
+  // broken/corrupt preview for the same oversized or unusual files.
+  const MAX_DIMENSION = 1280;
+
   const handleFile = (file: File) => {
+    setErrorMessage(null);
     const reader = new FileReader();
     reader.onload = () => {
-      setPhoto(reader.result as string);
-      setStage("review");
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, MAX_DIMENSION / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          setErrorMessage("Couldn't process that photo. Please try a different one.");
+          return;
+        }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        setPhoto(canvas.toDataURL("image/jpeg", 0.88));
+        setStage("review");
+      };
+      img.onerror = () => {
+        setErrorMessage("That file doesn't look like a valid image. Please try a different photo.");
+      };
+      img.src = reader.result as string;
+    };
+    reader.onerror = () => {
+      setErrorMessage("Couldn't read that file. Please try a different photo.");
     };
     reader.readAsDataURL(file);
   };
