@@ -61,10 +61,15 @@ export function TrendCard({ trend }: { trend: Trend }) {
         </div>
 
         {shopOpen && (
-          <div className="animate-in grid grid-cols-2 sm:grid-cols-3 gap-4 pt-3 border-t border-beige-dark/60">
-            {matches.map((p) => (
-              <ProductCard key={p.id} product={p} />
-            ))}
+          <div className="animate-in pt-3 border-t border-beige-dark/60 space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {matches.map((p) => (
+                <ProductCard key={p.id} product={p} />
+              ))}
+            </div>
+            <p className="text-xs text-gray">
+              Prices are estimates, not live listings — tap a piece to see the retailer&apos;s current price.
+            </p>
           </div>
         )}
       </div>

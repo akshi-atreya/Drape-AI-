@@ -39,28 +39,49 @@ const chance = (p) => rand() < p;
 const round2 = (n) => Math.round(n * 100) / 100;
 
 const RETAILERS = {
-  Zara: { brands: ["Zara"], priceMin: 25, priceMax: 99, tier: "mid" },
-  "H&M": { brands: ["H&M", "H&M Studio"], priceMin: 12, priceMax: 69, tier: "value" },
-  Mango: { brands: ["Mango"], priceMin: 29, priceMax: 119, tier: "mid" },
-  Aritzia: {
-    brands: ["Aritzia - Wilfred", "Aritzia - Babaton", "Aritzia - TNA"],
-    priceMin: 48,
-    priceMax: 228,
-    tier: "premium",
-  },
-  Nordstrom: {
-    brands: ["Nordstrom - BP.", "Nordstrom - Treasure & Bond", "Nordstrom - Halogen"],
-    priceMin: 39,
-    priceMax: 248,
-    tier: "premium",
-  },
-  ASOS: {
-    brands: ["ASOS DESIGN", "ASOS - Topshop", "ASOS - Pull&Bear"],
-    priceMin: 18,
-    priceMax: 89,
-    tier: "value",
-  },
+  Zara: { brands: ["Zara"], tier: "mid" },
+  "H&M": { brands: ["H&M", "H&M Studio"], tier: "value" },
+  Mango: { brands: ["Mango"], tier: "mid" },
+  Aritzia: { brands: ["Aritzia - Wilfred", "Aritzia - Babaton", "Aritzia - TNA"], tier: "premium" },
+  Nordstrom: { brands: ["Nordstrom - BP.", "Nordstrom - Treasure & Bond", "Nordstrom - Halogen"], tier: "premium" },
+  ASOS: { brands: ["ASOS DESIGN", "ASOS - Topshop", "ASOS - Pull&Bear"], tier: "value" },
 };
+
+// Realistic price bands, in USD, for a "mid" tier retailer (Zara/Mango).
+// Prices are scaled per retailer tier and per subcategory below — the
+// previous version drew every category from one flat per-retailer range,
+// which is how a "$40 blazer" happened: a blazer and a t-shirt from the
+// same retailer had identical odds of landing anywhere in $25-$99.
+const CATEGORY_PRICE_RANGE = {
+  Tops: [19, 59],
+  Bottoms: [29, 79],
+  Dresses: [39, 99],
+  Jackets: [59, 149],
+  Shoes: [39, 99],
+  Bags: [29, 89],
+  Accessories: [15, 49],
+};
+
+const TIER_MULTIPLIER = { value: 0.65, mid: 1, premium: 1.6 };
+
+// Overrides for subcategories that run notably more/less expensive than
+// the rest of their category, applied on top of the category+tier price.
+const SUBCATEGORY_PRICE_MULTIPLIER = {
+  "Wool Coat": 1.55, "Trench Coat": 1.35, "Leather Jacket": 1.3, "Suede Jacket": 1.25, "Blazer": 1.15,
+  "Tailored Trousers": 1.15, "Tailored Pants": 1.15,
+  "T-Shirt": 0.6, "Henley": 0.65, "Shorts": 0.6, "Cargo Pants": 0.85,
+  "Clutch": 1.1, "Jewelry Set": 1.25, "Watch": 1.7,
+  "Heeled Sandals": 1.1, "Derby Shoes": 1.2, "Chelsea Boots": 1.15, "Knee-High Boots": 1.2,
+};
+
+function priceForProduct(category, subcategory, retailerName) {
+  const [min, max] = CATEGORY_PRICE_RANGE[category];
+  const tierMult = TIER_MULTIPLIER[RETAILERS[retailerName].tier];
+  const subMult = SUBCATEGORY_PRICE_MULTIPLIER[subcategory] ?? 1;
+  const base = min + rand() * (max - min);
+  const jitter = 0.85 + rand() * 0.3; // +/-15% so identical subcategories still vary
+  return Math.max(8, round2(base * tierMult * subMult * jitter));
+}
 
 // Category defs are keyed by gender since real subcategory names differ
 // (e.g. "Blouse" vs "Flannel Shirt"). Dresses is women's-only.
@@ -265,8 +286,7 @@ for (const gender of ["Women", "Men"]) {
       const fit = pick(def.fits);
       const silhouette = pick(def.silhouettes);
 
-      const basePrice = retailer.priceMin + rand() * (retailer.priceMax - retailer.priceMin);
-      const price = round2(basePrice);
+      const price = priceForProduct(category, subcategory, retailerName);
       const onSale = chance(0.25);
       const salePrice = onSale ? round2(price * (1 - (0.15 + rand() * 0.25))) : null;
 

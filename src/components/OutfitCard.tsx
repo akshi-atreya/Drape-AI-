@@ -102,6 +102,9 @@ export function OutfitCard({
             );
           })}
         </ul>
+        <p className="text-xs text-gray -mt-1">
+          Prices are estimates, not live listings — tap Shop for the retailer&apos;s current price.
+        </p>
 
         {outfit.explanation && (
           <p className="text-sm text-charcoal-soft leading-relaxed border-t border-beige-dark/60 pt-4">
