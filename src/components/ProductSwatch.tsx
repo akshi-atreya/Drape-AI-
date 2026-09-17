@@ -1,11 +1,16 @@
+"use client";
+
+import { useState } from "react";
 import { Product } from "@/lib/types";
 import { colorHex, textOn } from "@/lib/colors";
 import { CategoryIcon } from "@/components/CategoryIcon";
 
 /**
- * Stands in for real product photography in the mock catalog: a soft color
- * wash in the product's actual color plus a minimal category icon. Swap for
- * <img src={product.image} /> once a real image field is populated.
+ * Real product photography in the mock catalog is a representative stock
+ * photo (see scripts/fetch-product-images.mjs) — a real photo of "a
+ * burgundy midi dress", not the exact SKU, since no such SKU exists. Falls
+ * back to a generated color-wash + icon swatch when no photo was found for
+ * a product, or if the photo fails to load.
  */
 export function ProductSwatch({
   product,
@@ -16,8 +21,24 @@ export function ProductSwatch({
   className?: string;
   compact?: boolean;
 }) {
+  const [imageFailed, setImageFailed] = useState(false);
   const hex = colorHex(product.primaryColor);
   const fg = textOn(hex);
+
+  if (product.imageUrl && !imageFailed) {
+    return (
+      <div className={`relative overflow-hidden ${className}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- external stock-photo URL, not a static/remote asset next/image is configured for */}
+        <img
+          src={product.imageUrl}
+          alt={product.name}
+          className="w-full h-full object-cover"
+          onError={() => setImageFailed(true)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className={`relative flex items-center justify-center overflow-hidden ${className}`}

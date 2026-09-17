@@ -333,6 +333,7 @@ for (const gender of ["Women", "Men"]) {
         salePrice,
         currency: "USD",
         imageSeed: id,
+        imageUrl: null, // populated by scripts/fetch-product-images.mjs
         primaryColor: color,
         productUrl: `https://www.${retailerName.toLowerCase().replace("&", "and")}.com/products/${id}`,
         availability: chance(0.94),

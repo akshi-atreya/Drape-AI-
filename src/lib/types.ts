@@ -106,8 +106,10 @@ export interface Product {
   price: number;
   salePrice: number | null;
   currency: "USD";
-  /** Deterministic seed used to render a generated placeholder image. */
+  /** Deterministic seed used to render a generated placeholder image (fallback when imageUrl is null). */
   imageSeed: string;
+  /** A real, representative stock photo for this color+subcategory (not the exact SKU — see fetch-product-images.mjs). Null until fetched, or if no good match was found. */
+  imageUrl: string | null;
   primaryColor: string;
   productUrl: string;
   availability: boolean;
