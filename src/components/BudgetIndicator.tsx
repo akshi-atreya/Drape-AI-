@@ -1,8 +1,17 @@
+"use client";
+
+import { useAppStore } from "@/store/useAppStore";
+import { formatPrice } from "@/lib/currency";
+
 export function BudgetIndicator({ total, budget }: { total: number; budget: number | null }) {
+  const countryCode = useAppStore((s) => s.countryCode);
+  const fxRates = useAppStore((s) => s.fxRates);
+  const price = (usd: number) => formatPrice(usd, countryCode, fxRates);
+
   if (budget == null) {
     return (
       <div className="text-xs uppercase tracking-wide text-gray font-medium">
-        Total ${total.toFixed(0)}
+        Total {price(total)}
       </div>
     );
   }
@@ -13,11 +22,11 @@ export function BudgetIndicator({ total, budget }: { total: number; budget: numb
     <div className="w-full">
       <div className="flex items-baseline justify-between mb-1.5">
         <span className={`text-sm font-medium ${over ? "text-accent" : "text-charcoal"}`}>
-          ${total.toFixed(0)} <span className="text-gray font-normal">/ ${budget.toFixed(0)}</span>
+          {price(total)} <span className="text-gray font-normal">/ {price(budget)}</span>
         </span>
         {over && (
           <span className="text-xs text-accent font-medium">
-            ${(total - budget).toFixed(0)} over
+            {price(total - budget)} over
           </span>
         )}
       </div>

@@ -29,6 +29,7 @@ interface AppState {
   savedLooks: SavedLook[];
   countryCode: CountryCode;
   countryCodeManuallySet: boolean;
+  fxRates: Record<string, number> | null;
   loading: boolean;
   error: string | null;
 
@@ -39,6 +40,7 @@ interface AppState {
   reviveOutfit: (outfit: Outfit) => void;
   detectCountry: () => void;
   setCountryCode: (country: CountryCode) => void;
+  fetchFxRates: () => Promise<void>;
   addWardrobeItem: (item: Omit<WardrobeItem, "id" | "addedAt">) => void;
   removeWardrobeItem: (id: string) => void;
   saveLook: (look: Omit<SavedLook, "id" | "savedAt">) => void;
@@ -50,6 +52,7 @@ async function callChatApi(
   messages: ChatMessage[],
   profile: StyleProfile,
   currentOutfits: Outfit[],
+  countryCode: CountryCode,
   targetOutfitId?: string
 ): Promise<{ reply: string; profile: StyleProfile; outfits: ChatApiOutfitResult[] }> {
   const res = await fetch("/api/chat", {
@@ -59,6 +62,7 @@ async function callChatApi(
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
       profile,
       currentOutfits,
+      countryCode,
       targetOutfitId,
     }),
   });
@@ -79,6 +83,7 @@ export const useAppStore = create<AppState>()(
       savedLooks: [],
       countryCode: "US",
       countryCodeManuallySet: false,
+      fxRates: null,
       loading: false,
       error: null,
 
@@ -99,12 +104,13 @@ export const useAppStore = create<AppState>()(
         }));
 
         try {
-          const { messages, profile, outfitsById, outfitOrder } = get();
+          const { messages, profile, outfitsById, outfitOrder, countryCode } = get();
           const currentOutfits = outfitOrder.map((id) => outfitsById[id]).filter(Boolean);
           const { reply, profile: newProfile, outfits } = await callChatApi(
             messages,
             profile,
             currentOutfits,
+            countryCode,
             targetOutfitId
           );
 
@@ -163,6 +169,17 @@ export const useAppStore = create<AppState>()(
       detectCountry: () =>
         set((s) => (s.countryCodeManuallySet ? {} : { countryCode: detectCountryFromLocale() })),
       setCountryCode: (country) => set({ countryCode: country, countryCodeManuallySet: true }),
+
+      fetchFxRates: async () => {
+        if (get().fxRates) return; // fetch once per session
+        try {
+          const res = await fetch("/api/fx");
+          const data = await res.json();
+          if (data.rates) set({ fxRates: data.rates });
+        } catch {
+          // Non-fatal — formatPrice() falls back to its static rate table.
+        }
+      },
 
       reviveOutfit: (outfit) =>
         set((s) => ({

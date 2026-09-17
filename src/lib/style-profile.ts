@@ -36,6 +36,7 @@ export function profileToOutfitRequest(
     budget: turn.budget ?? (profile.priceRange ? profile.priceRange[1] : null),
     occasion: turn.occasion ?? null,
     locationHint: turn.locationHint ?? null,
+    availableRetailers: turn.availableRetailers ?? null,
     season: turn.season ?? null,
     ownedItemNames: turn.ownedItemNames ?? [],
     count: turn.count ?? 3,

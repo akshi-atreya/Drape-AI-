@@ -1,21 +1,27 @@
-import { Gender, Product } from "@/lib/types";
+import { Gender, Product, Retailer } from "@/lib/types";
 
 /**
- * Regional "shop" links.
+ * Region support: which countries we know about, which of the 6 mock
+ * retailers actually operate (with local pricing) in each, their real
+ * search-URL patterns, and local currency.
  *
- * The mock catalog has no real per-product page (there's no live retailer
- * feed behind it — see README), so linking to a fabricated product-id path
- * like `zara.com/products/p0001` always 404s to the homepage. Instead we
- * link to each retailer's real, working search-results page for that
- * product's name, scoped to the viewer's detected region — verified against
- * the live sites rather than guessed. This is the honest MVP behavior: it
- * lands on genuinely relevant results, not a fabricated exact product page.
- * Swap this for real deep links once a live product feed/API is connected.
+ * The mock catalog has no real per-product page (no live retailer feed
+ * behind it — see README), so linking to a fabricated product-id path like
+ * `zara.com/products/p0001` always 404s. Instead we link to each retailer's
+ * real, working search-results page for that product's name, scoped to the
+ * viewer's region — verified against the live sites rather than guessed
+ * where noted below. Swap for real deep links once a live product feed/API
+ * is connected.
+ *
+ * Full global coverage (~195 countries, every retailer hand-verified in
+ * each) isn't tractable to maintain by hand. This covers a solid set of
+ * major markets; anything outside it falls back to the US storefront in
+ * USD, clearly worse but never broken.
  */
 
-export type CountryCode = "US" | "GB" | "CA" | "AU" | "DE" | "FR";
+export type CountryCode = "US" | "GB" | "CA" | "AU" | "DE" | "FR" | "ES" | "IT" | "NL" | "IN";
 
-const SUPPORTED_COUNTRIES: CountryCode[] = ["US", "GB", "CA", "AU", "DE", "FR"];
+const SUPPORTED_COUNTRIES: CountryCode[] = ["US", "GB", "CA", "AU", "DE", "FR", "ES", "IT", "NL", "IN"];
 
 export const COUNTRY_LABELS: Record<CountryCode, string> = {
   US: "United States",
@@ -24,7 +30,56 @@ export const COUNTRY_LABELS: Record<CountryCode, string> = {
   AU: "Australia",
   DE: "Germany",
   FR: "France",
+  ES: "Spain",
+  IT: "Italy",
+  NL: "Netherlands",
+  IN: "India",
 };
+
+/** ISO 4217 currency each country shops in. Our catalog is USD-denominated; see currency.ts for live conversion. */
+export const CURRENCY_BY_COUNTRY: Record<CountryCode, string> = {
+  US: "USD",
+  GB: "GBP",
+  CA: "CAD",
+  AU: "AUD",
+  DE: "EUR",
+  FR: "EUR",
+  ES: "EUR",
+  IT: "EUR",
+  NL: "EUR",
+  IN: "INR",
+};
+
+/**
+ * Which retailers actually operate a local storefront in each country —
+ * this is what makes recommendations themselves country-aware, not just
+ * the redirect link. Verified live for US/GB/IN; Aritzia and Nordstrom are
+ * confirmed North-America-only (no international sites at all). Mango has
+ * no dedicated India storefront (shop.mango.com/in redirects to /gb) so
+ * it's excluded there; ASOS ships to India but its currency defaults to
+ * GBP with no confirmed local URL path, so it's also left out to avoid
+ * showing the wrong currency. EU markets (DE/FR/ES/IT/NL) assume Zara,
+ * H&M, Mango, and ASOS's well-documented per-country URL scheme
+ * generalizes the same way it does for the countries we did verify live —
+ * reasonable, not individually hand-verified.
+ */
+const RETAILERS_BY_COUNTRY: Record<CountryCode, Retailer[]> = {
+  US: ["Zara", "H&M", "Mango", "Aritzia", "Nordstrom", "ASOS"],
+  CA: ["Zara", "H&M", "Aritzia", "Nordstrom", "ASOS"],
+  GB: ["Zara", "H&M", "Mango", "ASOS"],
+  AU: ["Zara", "H&M", "ASOS"],
+  DE: ["Zara", "H&M", "Mango", "ASOS"],
+  FR: ["Zara", "H&M", "Mango", "ASOS"],
+  ES: ["Zara", "H&M", "Mango", "ASOS"],
+  IT: ["Zara", "H&M", "Mango", "ASOS"],
+  NL: ["Zara", "H&M", "Mango", "ASOS"],
+  IN: ["Zara", "H&M", "ASOS"],
+};
+
+export function retailersAvailableIn(country: CountryCode | null): Retailer[] | null {
+  if (!country) return null;
+  return RETAILERS_BY_COUNTRY[country] ?? null;
+}
 
 /** Reads the browser's locale (no permission prompt) to guess a region. Falls back to US. */
 export function detectCountryFromLocale(): CountryCode {
@@ -41,13 +96,11 @@ interface RegionPaths {
   hm: string; // "{lang}_{country}"
   mango: string; // "{country}/{lang}"
   aritzia: string; // "{country}/{lang}"
-  asos: string; // "{country}"
+  asos: string; // "{country}", or "" for no dedicated country path
 }
 
-// Best-effort regional path segments. Only the US segment for each retailer
-// has been verified live; others are reasonable defaults and fall back to
-// the US path for retailers that don't clearly operate a separate storefront
-// for that country (e.g. Mango doesn't have a distinct AU site).
+// Verified live: US (all), GB (Zara/H&M/Mango/ASOS), IN (Zara/H&M). Others
+// are the same well-documented per-country pattern extended by inference.
 const REGION_PATHS: Record<CountryCode, RegionPaths> = {
   US: { zara: "us/en", hm: "en_us", mango: "us/en", aritzia: "us/en", asos: "us" },
   GB: { zara: "uk/en", hm: "en_gb", mango: "gb/en", aritzia: "us/en", asos: "en" },
@@ -55,6 +108,10 @@ const REGION_PATHS: Record<CountryCode, RegionPaths> = {
   AU: { zara: "au/en", hm: "en_us", mango: "us/en", aritzia: "us/en", asos: "au" },
   DE: { zara: "de/de", hm: "de_de", mango: "de/en", aritzia: "us/en", asos: "de" },
   FR: { zara: "fr/fr", hm: "fr_fr", mango: "fr/fr", aritzia: "us/en", asos: "fr" },
+  ES: { zara: "es/es", hm: "es_es", mango: "es/es", aritzia: "us/en", asos: "es" },
+  IT: { zara: "it/it", hm: "it_it", mango: "it/it", aritzia: "us/en", asos: "it" },
+  NL: { zara: "nl/nl", hm: "nl_nl", mango: "nl/en", aritzia: "us/en", asos: "nl" },
+  IN: { zara: "in/en", hm: "en_in", mango: "us/en", aritzia: "us/en", asos: "" },
 };
 
 /**
@@ -112,8 +169,11 @@ export function getShopUrl(product: Product, country: CountryCode = "US"): strin
       return `https://www.aritzia.com/${paths.aritzia}/search?q=${term}`;
     case "Nordstrom":
       return `https://www.nordstrom.com/sr?origin=keywordsearch&keyword=${term}&filterByGenderAge=${nordstromGenderParam(gender)}`;
-    case "ASOS":
-      return `https://www.asos.com/${paths.asos}/search/?q=${term}${gender !== "Women" ? "&refine=floor:1001,2001" : ""}`;
+    case "ASOS": {
+      const prefix = paths.asos ? `${paths.asos}/` : "";
+      const refine = gender !== "Women" ? "&refine=floor:1001,2001" : "";
+      return `https://www.asos.com/${prefix}search/?q=${term}${refine}`;
+    }
     default:
       return product.productUrl;
   }

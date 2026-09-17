@@ -4,9 +4,11 @@ import { Product } from "@/lib/types";
 import { ProductSwatch } from "@/components/ProductSwatch";
 import { useAppStore } from "@/store/useAppStore";
 import { getShopUrl } from "@/lib/locale";
+import { formatPrice } from "@/lib/currency";
 
 export function ProductCard({ product }: { product: Product }) {
   const countryCode = useAppStore((s) => s.countryCode);
+  const fxRates = useAppStore((s) => s.fxRates);
   const price = product.salePrice ?? product.price;
   return (
     <a
@@ -24,9 +26,9 @@ export function ProductCard({ product }: { product: Product }) {
         <div className="flex items-center justify-between">
           <p className="text-xs text-gray truncate">{product.brand}</p>
           <p className="text-xs text-charcoal shrink-0">
-            ${price.toFixed(0)}
+            {formatPrice(price, countryCode, fxRates)}
             {product.salePrice && (
-              <span className="text-gray line-through ml-1">${product.price.toFixed(0)}</span>
+              <span className="text-gray line-through ml-1">{formatPrice(product.price, countryCode, fxRates)}</span>
             )}
           </p>
         </div>

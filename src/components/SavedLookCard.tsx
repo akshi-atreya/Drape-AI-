@@ -5,6 +5,7 @@ import { SavedLook } from "@/lib/types";
 import { ProductSwatch } from "@/components/ProductSwatch";
 import { useAppStore } from "@/store/useAppStore";
 import { getShopUrl } from "@/lib/locale";
+import { formatPrice } from "@/lib/currency";
 
 export function SavedLookCard({ look }: { look: SavedLook }) {
   const removeSavedLook = useAppStore((s) => s.removeSavedLook);
@@ -12,6 +13,7 @@ export function SavedLookCard({ look }: { look: SavedLook }) {
   const sendMessage = useAppStore((s) => s.sendMessage);
   const reviveOutfit = useAppStore((s) => s.reviveOutfit);
   const countryCode = useAppStore((s) => s.countryCode);
+  const fxRates = useAppStore((s) => s.fxRates);
 
   if (look.type === "outfit" && look.outfit) {
     const outfit = look.outfit;
@@ -26,7 +28,7 @@ export function SavedLookCard({ look }: { look: SavedLook }) {
           <div>
             <h3 className="font-serif text-xl">{outfit.name}</h3>
             <p className="text-xs text-gray mt-0.5">
-              {outfit.occasion} · ${outfit.totalPrice.toFixed(0)} · Saved{" "}
+              {outfit.occasion} · {formatPrice(outfit.totalPrice, countryCode, fxRates)} · Saved{" "}
               {new Date(look.savedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
             </p>
           </div>
@@ -70,7 +72,7 @@ export function SavedLookCard({ look }: { look: SavedLook }) {
         <ProductSwatch product={p} className="w-full aspect-[4/3]" />
         <div className="p-5 space-y-2">
           <h3 className="text-sm">{p.name}</h3>
-          <p className="text-xs text-gray">{p.brand} · ${(p.salePrice ?? p.price).toFixed(0)}</p>
+          <p className="text-xs text-gray">{p.brand} · {formatPrice(p.salePrice ?? p.price, countryCode, fxRates)}</p>
           <button
             onClick={() => removeSavedLook(look.id)}
             className="text-xs text-accent hover:underline"

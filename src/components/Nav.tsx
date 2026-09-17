@@ -16,6 +16,7 @@ const LINKS = [
 export function Nav() {
   const pathname = usePathname();
   const detectCountry = useAppStore((s) => s.detectCountry);
+  const fetchFxRates = useAppStore((s) => s.fetchFxRates);
   const { data: session, status } = useSession();
 
   useEffect(() => {
@@ -23,7 +24,8 @@ export function Nav() {
     // to — safe to run once, no permission prompt (reads navigator.language,
     // not geolocation).
     detectCountry();
-  }, [detectCountry]);
+    fetchFxRates();
+  }, [detectCountry, fetchFxRates]);
 
   return (
     <header className="sticky top-0 z-30 bg-ivory/90 backdrop-blur-sm border-b border-beige-dark/50">

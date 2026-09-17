@@ -17,6 +17,7 @@ import {
 } from "@/lib/recommendation-engine";
 import { profileToOutfitRequest, mergeProfile } from "@/lib/style-profile";
 import { catalog } from "@/lib/catalog";
+import { CountryCode, retailersAvailableIn } from "@/lib/locale";
 
 /**
  * Tool surface exposed to the LLM. The model handles conversation, intent
@@ -53,7 +54,7 @@ export const toolDefinitions: Anthropic.Tool[] = [
       type: "object",
       properties: {
         gender: { type: "string", enum: GENDERS, description: "Who you're shopping for. Required unless already known from the profile." },
-        budget: { type: ["number", "null"], description: "Total budget in USD for the whole outfit, if known." },
+        budget: { type: ["number", "null"], description: "Total budget for the whole outfit, if known. Always in USD — convert from the shopper's local currency first if they stated one (see the currency context in your system prompt)." },
         occasion: { type: ["string", "null"] },
         locationHint: { type: ["string", "null"], description: "City/trip mentioned by the user, e.g. 'NYC', 'Paris'." },
         season: { type: ["string", "null"], enum: [...SEASON_TAGS, null] },
@@ -115,6 +116,8 @@ export interface ToolRunContext {
   replaces: Map<string, string>;
   /** ids produced by find_outfits this turn — a brand new board, not a patch. */
   freshSetIds: Set<string>;
+  /** Shopper's region — restricts recommendations to retailers that actually operate there. */
+  countryCode: CountryCode;
 }
 
 export function executeTool(
@@ -148,6 +151,7 @@ export function executeTool(
       count: (input.count as number) ?? 3,
       styleTags: (input.styleTagsOverride as StyleTag[] | undefined) ?? undefined,
       trendLevel: (input.trendLevelOverride as number | undefined) ?? undefined,
+      availableRetailers: retailersAvailableIn(ctx.countryCode),
     });
     const outfits = generateOutfits(catalog, req);
     outfits.forEach((o) => {
@@ -183,7 +187,11 @@ export function executeTool(
       return { error: `No outfit found with id ${outfitId}. Use an id from the outfits currently shown.` };
     }
     const instruction = parseRemixInstruction((input.instruction as string) ?? "");
-    const req = profileToOutfitRequest(ctx.profile, { budget: base.budget, occasion: base.occasion });
+    const req = profileToOutfitRequest(ctx.profile, {
+      budget: base.budget,
+      occasion: base.occasion,
+      availableRetailers: retailersAvailableIn(ctx.countryCode),
+    });
     const updated = remixOutfit(catalog, base, instruction, req);
     ctx.outfitsById.delete(outfitId);
     ctx.outfitsById.set(updated.id, updated);

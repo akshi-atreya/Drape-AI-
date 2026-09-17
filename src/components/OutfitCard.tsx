@@ -6,6 +6,7 @@ import { ProductSwatch } from "@/components/ProductSwatch";
 import { BudgetIndicator } from "@/components/BudgetIndicator";
 import { useAppStore } from "@/store/useAppStore";
 import { getShopUrl } from "@/lib/locale";
+import { formatPrice } from "@/lib/currency";
 
 const REMIX_CHIPS = [
   "Make it more casual",
@@ -28,6 +29,7 @@ export function OutfitCard({
   const saveLook = useAppStore((s) => s.saveLook);
   const loading = useAppStore((s) => s.loading);
   const countryCode = useAppStore((s) => s.countryCode);
+  const fxRates = useAppStore((s) => s.fxRates);
   const [remixOpen, setRemixOpen] = useState(false);
   const [remixText, setRemixText] = useState("");
   const [justSaved, setJustSaved] = useState(false);
@@ -84,9 +86,11 @@ export function OutfitCard({
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-sm text-charcoal">
-                    ${price.toFixed(0)}
+                    {formatPrice(price, countryCode, fxRates)}
                     {it.product.salePrice && (
-                      <span className="text-gray line-through ml-1 text-xs">${it.product.price.toFixed(0)}</span>
+                      <span className="text-gray line-through ml-1 text-xs">
+                        {formatPrice(it.product.price, countryCode, fxRates)}
+                      </span>
                     )}
                   </p>
                   <a

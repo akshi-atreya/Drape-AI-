@@ -8,6 +8,7 @@ import {
   Outfit,
   OutfitItem,
   Product,
+  Retailer,
   StyleTag,
   TrendTag,
 } from "@/lib/types";
@@ -54,6 +55,8 @@ export interface OutfitRequest {
   budget: number | null;
   occasion: string | null;
   locationHint: string | null;
+  /** Retailers actually available to the shopper's region; null = no restriction (e.g. region unknown). */
+  availableRetailers: Retailer[] | null;
   styleTags: StyleTag[];
   trendLevel: number; // 0 classic .. 1 trendsetter
   colorsLike: string[];
@@ -70,6 +73,7 @@ export const defaultOutfitRequest: OutfitRequest = {
   budget: null,
   occasion: null,
   locationHint: null,
+  availableRetailers: null,
   styleTags: [],
   trendLevel: 0.5,
   colorsLike: [],
@@ -207,6 +211,7 @@ function filterCatalog(catalog: Product[], req: OutfitRequest): Product[] {
   return catalog.filter((p) => {
     if (!p.availability) return false;
     if (req.gender && p.gender !== req.gender && p.gender !== "Unisex") return false;
+    if (req.availableRetailers && !req.availableRetailers.includes(p.retailer)) return false;
     if (req.brandsAvoid.some((b) => p.brand.toLowerCase().includes(b.toLowerCase()) || p.retailer.toLowerCase().includes(b.toLowerCase()))) {
       return false;
     }

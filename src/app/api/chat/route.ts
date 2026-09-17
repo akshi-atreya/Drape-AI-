@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { emptyStyleProfile, Outfit, StyleProfile } from "@/lib/types";
 import { executeTool, SYSTEM_PROMPT, toolDefinitions, ToolRunContext } from "@/lib/chat-tools";
+import { CountryCode, COUNTRY_LABELS } from "@/lib/locale";
+import { currencyForCountry, fetchFxRates } from "@/lib/currency";
 
 export const runtime = "nodejs";
 
@@ -13,6 +15,7 @@ interface ChatRequestBody {
   profile: StyleProfile;
   currentOutfits: Outfit[];
   targetOutfitId?: string;
+  countryCode?: CountryCode;
 }
 
 export async function POST(req: NextRequest) {
@@ -36,12 +39,14 @@ export async function POST(req: NextRequest) {
 
   const anthropic = new Anthropic({ apiKey });
 
+  const countryCode: CountryCode = body.countryCode ?? "US";
   const ctx: ToolRunContext = {
     profile: body.profile ?? emptyStyleProfile,
     outfitsById: new Map((body.currentOutfits ?? []).map((o) => [o.id, o])),
     touchedIds: [],
     replaces: new Map(),
     freshSetIds: new Set(),
+    countryCode,
   };
 
   const conversation: Anthropic.MessageParam[] = (body.messages ?? []).map((m) => ({
@@ -49,10 +54,26 @@ export async function POST(req: NextRequest) {
     content: m.content,
   }));
 
+  // The catalog/engine/tools work entirely in USD internally — this only
+  // tells the model what currency to *speak* in and how to convert a
+  // budget the user states in their own currency before calling
+  // find_outfits (whose budget parameter is always USD).
+  const currency = currencyForCountry(countryCode);
+  let currencyContext = "";
+  if (currency !== "USD") {
+    const { rates } = await fetchFxRates();
+    const rate = rates[currency];
+    if (rate) {
+      currencyContext = `\n\nCurrency context for this turn: the shopper is in ${COUNTRY_LABELS[countryCode]}, shopping in ${currency}. 1 USD ≈ ${rate.toFixed(2)} ${currency} (current rate). All tool inputs/outputs (budget, prices) are in USD — when you speak to the user, express amounts in ${currency} using this rate (round naturally, e.g. nearest 10 or 100). If the user states a budget in ${currency} or any non-USD currency, convert it to USD with this rate before passing it to find_outfits's budget parameter.`;
+    }
+  }
+
   const targetOutfit = body.targetOutfitId ? ctx.outfitsById.get(body.targetOutfitId) : undefined;
-  const system = targetOutfit
-    ? `${SYSTEM_PROMPT}\n\nContext for this turn only: the user's message is about the outfit with id "${targetOutfit.id}" ("${targetOutfit.name}"), currently shown on screen. If this is a modification request, call remix_outfit with that exact outfitId.`
-    : SYSTEM_PROMPT;
+  const targetContext = targetOutfit
+    ? `\n\nContext for this turn only: the user's message is about the outfit with id "${targetOutfit.id}" ("${targetOutfit.name}"), currently shown on screen. If this is a modification request, call remix_outfit with that exact outfitId.`
+    : "";
+
+  const system = `${SYSTEM_PROMPT}${currencyContext}${targetContext}`;
 
   let finalMessage = "";
   const outfitExplanations = new Map<string, string>();
