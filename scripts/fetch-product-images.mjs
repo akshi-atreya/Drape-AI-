@@ -41,11 +41,23 @@ async function searchPexels(query) {
 /** Query cache so products sharing a color+subcategory only cost one call. */
 const cache = new Map();
 
+function genderTerm(gender) {
+  if (gender === "Men") return "men's";
+  if (gender === "Women") return "women's";
+  return ""; // Unisex — no gender qualifier
+}
+
 async function getImageUrl(product) {
-  const primaryQuery = `${product.primaryColor} ${product.subcategory}`.toLowerCase();
+  const gender = genderTerm(product.gender);
+  // Gender goes first — it's the strongest signal for which photos Pexels
+  // returns (a bare "burgundy leather jacket" search happily returns a man
+  // wearing one even for a product tagged Women, since search relevance
+  // ranks on the garment/color terms, not who's wearing it).
+  const primaryQuery = `${gender} ${product.primaryColor} ${product.subcategory}`.trim().toLowerCase();
+  const secondaryQuery = `${gender} ${product.subcategory}`.trim().toLowerCase();
   const fallbackQuery = product.subcategory.toLowerCase();
 
-  for (const query of [primaryQuery, fallbackQuery]) {
+  for (const query of [primaryQuery, secondaryQuery, fallbackQuery]) {
     if (cache.has(query)) {
       const cached = cache.get(query);
       if (cached) return cached;

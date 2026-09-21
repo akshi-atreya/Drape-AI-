@@ -107,7 +107,7 @@ export function OutfitCard({
           })}
         </ul>
         <p className="text-xs text-gray -mt-1">
-          Prices are estimates, not live listings — tap Shop for the retailer&apos;s current price.
+          ~ marks an estimate, not a live listing — tap Shop for the retailer&apos;s current price.
         </p>
 
         {outfit.explanation && (

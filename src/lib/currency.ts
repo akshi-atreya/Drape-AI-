@@ -1,5 +1,23 @@
 import { CountryCode, CURRENCY_BY_COUNTRY } from "@/lib/locale";
 
+// Explicit locale per country/currency — Intl.NumberFormat(undefined, ...)
+// uses the *browser's* locale to decide symbol style, which for USD often
+// renders "US$" instead of "$" (many non-US locales disambiguate that way).
+// Passing the shopper's own country's locale gives the plain, expected
+// symbol for their currency instead.
+const LOCALE_BY_COUNTRY: Record<CountryCode, string> = {
+  US: "en-US",
+  GB: "en-GB",
+  CA: "en-CA",
+  AU: "en-AU",
+  DE: "de-DE",
+  FR: "fr-FR",
+  ES: "es-ES",
+  IT: "it-IT",
+  NL: "nl-NL",
+  IN: "en-IN",
+};
+
 /**
  * Live currency conversion for display. The catalog itself stays entirely
  * USD-denominated internally (recommendation engine, budgets, storage) —
@@ -46,21 +64,33 @@ export function convertUsd(usdAmount: number, currency: string, rates: Record<st
   return usdAmount * rate;
 }
 
-/** Formats a USD amount as the shopper's local currency, e.g. $79 -> ₹6,952. */
+/**
+ * Formats a USD amount as the shopper's local currency, e.g. $79 -> ~₹6,952.
+ * Prefixed with "~" by default — every price in this app is a generated
+ * estimate for a mock catalog item, never a live listing (see the "Shop"
+ * link, which opens a real search page, not this exact SKU), so the symbol
+ * stays on the price itself rather than relying only on a footnote users
+ * can scroll past. Pass approx:false for a context that already makes
+ * that clear another way (e.g. right next to its own "estimate" label).
+ */
 export function formatPrice(
   usdAmount: number,
   country: CountryCode | null,
-  rates: Record<string, number> | null
+  rates: Record<string, number> | null,
+  approx = true
 ): string {
   const currency = currencyForCountry(country);
   const converted = convertUsd(usdAmount, currency, rates);
+  const locale = country ? LOCALE_BY_COUNTRY[country] : "en-US";
   try {
-    return new Intl.NumberFormat(undefined, {
+    const formatted = new Intl.NumberFormat(locale, {
       style: "currency",
       currency,
       maximumFractionDigits: converted >= 100 ? 0 : 2,
     }).format(converted);
+    return approx ? `~${formatted}` : formatted;
   } catch {
-    return `${currency} ${converted.toFixed(0)}`;
+    const fallback = `${currency} ${converted.toFixed(0)}`;
+    return approx ? `~${fallback}` : fallback;
   }
 }

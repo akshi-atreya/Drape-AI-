@@ -68,7 +68,7 @@ export function TrendCard({ trend }: { trend: Trend }) {
               ))}
             </div>
             <p className="text-xs text-gray">
-              Prices are estimates, not live listings — tap a piece to see the retailer&apos;s current price.
+              ~ marks an estimate, not a live listing — tap a piece to see the retailer&apos;s current price.
             </p>
           </div>
         )}
