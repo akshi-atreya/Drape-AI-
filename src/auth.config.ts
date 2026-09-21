@@ -18,7 +18,8 @@ export const authConfig = {
         path.startsWith("/sign-in") ||
         path.startsWith("/sign-up") ||
         path.startsWith("/api/auth") ||
-        path.startsWith("/api/stats");
+        path.startsWith("/api/stats") ||
+        path.startsWith("/about");
       if (isPublicRoute) return true;
       return isLoggedIn;
     },
