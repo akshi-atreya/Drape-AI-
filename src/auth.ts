@@ -17,7 +17,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const password = credentials?.password as string | undefined;
         if (!email || !password) return null;
 
-        const user = getUserByEmail(email);
+        const user = await getUserByEmail(email);
         if (!user) return null;
         if (!verifyPassword(user, password)) return null;
 
