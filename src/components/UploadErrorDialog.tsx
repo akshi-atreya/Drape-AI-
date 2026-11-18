@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { UploadProblem } from "@/lib/image-utils";
 
 /** A centered dialog explaining exactly why an upload failed and how to fix it. */
@@ -21,7 +22,10 @@ export function UploadErrorDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  return (
+  // Rendered into <body> (a portal): an ancestor with an animation/transform — like the
+  // outfit card or the piece row — would otherwise become the "screen" for `fixed`, and
+  // the dialog would appear squeezed and off-center inside it.
+  return createPortal(
     <div
       className="fixed inset-0 z-[70] bg-charcoal/50 backdrop-blur-sm flex items-center justify-center p-5"
       onClick={onClose}
@@ -72,6 +76,7 @@ export function UploadErrorDialog({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

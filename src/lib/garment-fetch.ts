@@ -13,7 +13,7 @@ import { isIP } from "node:net";
  * address, and both the page and the image are size- and time-capped.
  */
 
-const MAX_HTML_BYTES = 2_000_000;
+const MAX_HTML_BYTES = 3_000_000; // read at most this much HTML; the tags we need are near the top
 const MAX_IMAGE_BYTES = 6_000_000;
 const TIMEOUT_MS = 8000;
 const MAX_REDIRECTS = 4;
@@ -101,6 +101,28 @@ async function safeFetch(rawUrl: string, accept: string): Promise<Response> {
   throw new GarmentFetchError("That link redirected too many times.");
 }
 
+/** Reads up to maxBytes and stops quietly (no error) — for HTML, where the head is all we need. */
+async function readUpTo(res: Response, maxBytes: number): Promise<Uint8Array> {
+  const reader = res.body?.getReader();
+  if (!reader) throw new GarmentFetchError("Empty response.");
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (total < maxBytes) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    total += value.byteLength;
+  }
+  await reader.cancel().catch(() => {});
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.byteLength;
+  }
+  return out;
+}
+
 async function readCapped(res: Response, maxBytes: number): Promise<Uint8Array> {
   const reader = res.body?.getReader();
   if (!reader) throw new GarmentFetchError("Empty response.");
@@ -186,7 +208,30 @@ export interface GarmentFromLink {
   sourceUrl: string;
 }
 
-export async function garmentFromLink(link: string): Promise<GarmentFromLink> {
+const TRACKING_PARAM = /^(utm_.+|gclid|gclsrc|gbraid|wbraid|gad_.+|fbclid|msclkid|mc_cid|mc_eid|_ga|igshid|yclid|dclid)$/i;
+
+/** Drops advertising/tracking parameters (they only add noise and can trip bot filters). */
+function stripTracking(raw: string): string {
+  try {
+    const u = new URL(raw);
+    for (const key of [...u.searchParams.keys()]) if (TRACKING_PARAM.test(key)) u.searchParams.delete(key);
+    return u.toString();
+  } catch {
+    return raw;
+  }
+}
+
+/** True for the "you've been blocked" pages stores return instead of the product (often with a 200 status). */
+function looksLikeBotWall(html: string): boolean {
+  if (/WAF_Denial|px-captcha|cf-challenge|cf-browser-verification|Pardon Our Interruption|Incident Number|Access Denied|Attention Required|verify you are (a )?human|are you a (robot|human)|unusual traffic|request blocked/i.test(html)) {
+    return true;
+  }
+  // A real product page is large and has a title; a tiny page with neither is a wall.
+  return html.length < 6000 && !/<title[^>]*>[^<]{3,}/i.test(html);
+}
+
+export async function garmentFromLink(rawLink: string): Promise<GarmentFromLink> {
+  const link = stripTracking(rawLink);
   const res = await safeFetch(link, "text/html,application/xhtml+xml,image/*;q=0.8,*/*;q=0.5");
 
   if (res.status === 403 || res.status === 429 || res.status === 401) {
@@ -204,10 +249,14 @@ export async function garmentFromLink(link: string): Promise<GarmentFromLink> {
 
   if (!contentType.includes("html")) throw new GarmentFetchError("That link doesn't look like a product page.");
 
-  const html = new TextDecoder().decode(await readCapped(res, MAX_HTML_BYTES));
+  const html = new TextDecoder().decode(await readUpTo(res, MAX_HTML_BYTES));
   const imageRef =
     metaContent(html, ["og:image:secure_url", "og:image", "twitter:image", "twitter:image:src"]) ?? jsonLdImage(html);
-  if (!imageRef) throw new GarmentFetchError("Couldn't find a product photo on that page.");
+  if (!imageRef) {
+    throw new GarmentFetchError(
+      looksLikeBotWall(html) ? "That store blocked the request." : "Couldn't find a product photo on that page."
+    );
+  }
 
   let imageUrl: string;
   try {

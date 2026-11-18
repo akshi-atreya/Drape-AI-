@@ -5,6 +5,17 @@ import { GarmentPick } from "@/lib/types";
 import { loadImageFile, resizeToJpegDataUrl, UploadProblem, UploadProblemError } from "@/lib/image-utils";
 import { UploadErrorDialog } from "@/components/UploadErrorDialog";
 
+/** "llbean.com/llb/shop/504209" — host and path only, so long tracking links stay readable. */
+function shortAddress(link: string): string {
+  try {
+    const u = new URL(link);
+    const path = u.pathname.length > 40 ? `${u.pathname.slice(0, 40)}…` : u.pathname;
+    return `${u.hostname.replace(/^www\./, "")}${path === "/" ? "" : path}`;
+  } catch {
+    return link.slice(0, 60);
+  }
+}
+
 /**
  * Lets the shopper attach the real garment for a recommended piece: paste a
  * product link (we read the photo from the page) or upload an image/
@@ -38,13 +49,19 @@ export function PickPanel({
       const data = await res.json();
       if (!res.ok) {
         const msg: string = data.error ?? "Couldn't read that link.";
+        const blocked = /blocked/i.test(msg);
+        const noPhoto = /find a product photo/i.test(msg);
         setProblem({
           title: "Couldn't get the photo from that link",
-          fileInfo: link,
-          reason: /blocked/i.test(msg)
-            ? "That store blocked the request. Many retailers (H&M and Zara are common ones) don't let apps read their product pages automatically."
-            : msg,
-          fix: "Save the product image or take a screenshot of the item, then upload it instead.",
+          fileInfo: shortAddress(link),
+          reason: blocked
+            ? "That store blocked the request. Many retailers (H&M, Zara and L.L.Bean are common ones) don't let apps read their product pages automatically."
+            : noPhoto
+              ? "That page doesn't include the product photo in a form we can read. Many stores (L.L.Bean is one) load the product details with JavaScript after the page opens, so a link alone isn't enough."
+              : msg,
+          fix: blocked || noPhoto
+            ? "Right-click the product photo and choose \"Copy image address\", then paste that link here instead. Or save the image or take a screenshot, and upload it."
+            : "Save the product image or take a screenshot of the item, then upload it instead.",
         });
         return;
       }
@@ -53,7 +70,7 @@ export function PickPanel({
     } catch {
       setProblem({
         title: "Couldn't reach that link",
-        fileInfo: link,
+        fileInfo: shortAddress(link),
         reason: "The request failed — you may be offline, or the link isn't a valid web address.",
         fix: "Check the link and your connection, or upload a screenshot or photo of the piece instead.",
       });
