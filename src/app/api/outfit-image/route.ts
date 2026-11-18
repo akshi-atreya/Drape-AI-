@@ -26,6 +26,6 @@ export async function POST(req: NextRequest) {
   const occasion = typeof body.occasion === "string" ? body.occasion.replace(/[^\p{L}\p{N}\s'&-]/gu, "").trim().slice(0, 60) || "everyday" : "everyday";
 
   const result = await generateOutfitImage({ pieces, gender, occasion });
-  if (result.error) return NextResponse.json({ error: result.error }, { status: 502 });
+  if (result.error) return NextResponse.json({ error: result.error, reason: result.reason }, { status: 502 });
   return NextResponse.json({ imageDataUrl: result.imageDataUrl });
 }

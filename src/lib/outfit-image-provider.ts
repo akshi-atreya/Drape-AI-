@@ -16,9 +16,13 @@ export interface OutfitImageRequest {
   occasion: string;
 }
 
-export async function generateOutfitImage(req: OutfitImageRequest): Promise<{ imageDataUrl?: string; error?: string }> {
+export type ImageFailure = "credits" | "busy" | "other";
+
+export async function generateOutfitImage(
+  req: OutfitImageRequest
+): Promise<{ imageDataUrl?: string; error?: string; reason?: ImageFailure }> {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return { error: "GEMINI_API_KEY is not set." };
+  if (!apiKey) return { error: "Look images aren't set up on the server.", reason: "other" };
 
   const audience = req.gender === "Men" ? "menswear" : req.gender === "Women" ? "womenswear" : "unisex";
   const list = req.pieces.map((p) => `- ${p}`).join("\n");
@@ -51,9 +55,13 @@ Rules:
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("Outfit image error:", message.slice(0, 300));
-    if (message.includes("RESOURCE_EXHAUSTED") || message.includes('"code":429')) {
-      return { error: "Image service is busy or out of quota." };
+    // Out of prepaid credit (HTTP 402) is different from a momentary rate limit (429).
+    if (/prepayment|credits are depleted|"code":402|billing/i.test(message)) {
+      return { error: "Look images are paused right now.", reason: "credits" };
     }
-    return { error: "Couldn't generate the look image." };
+    if (message.includes("RESOURCE_EXHAUSTED") || message.includes('"code":429')) {
+      return { error: "The image service is busy. Please retry in a moment.", reason: "busy" };
+    }
+    return { error: "Couldn't generate the look image.", reason: "other" };
   }
 }

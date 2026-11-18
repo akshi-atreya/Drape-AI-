@@ -37,7 +37,9 @@ export function requestOutfitImage(outfit: Outfit, gender: "Women" | "Men" | "Un
       }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.imageDataUrl) throw new Error(data.error || "Couldn't generate the look image.");
+    if (!res.ok || !data.imageDataUrl) {
+      throw Object.assign(new Error(data.error || "Couldn't generate the look image."), { reason: data.reason as string | undefined });
+    }
     // Keep it small enough to store with saved looks.
     return resizeToJpegDataUrl(data.imageDataUrl, 800, 0.82);
   }).finally(() => inFlight.delete(outfit.id));

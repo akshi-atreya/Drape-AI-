@@ -17,6 +17,7 @@ export function OutfitHero({ outfit, image: savedImage }: { outfit: Outfit; imag
   const setOutfitImage = useAppStore((s) => s.setOutfitImage);
   const gender = useAppStore((s) => s.profile.gender);
   const [failed, setFailed] = useState(false);
+  const [reason, setReason] = useState<string | undefined>();
   const [attempt, setAttempt] = useState(0);
 
   const image = savedImage ?? storedImage;
@@ -26,7 +27,11 @@ export function OutfitHero({ outfit, image: savedImage }: { outfit: Outfit; imag
     let cancelled = false;
     requestOutfitImage(outfit, gender)
       .then((img) => !cancelled && setOutfitImage(outfit.id, img))
-      .catch(() => !cancelled && setFailed(true));
+      .catch((err) => {
+        if (cancelled) return;
+        setReason((err as { reason?: string }).reason);
+        setFailed(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -61,7 +66,11 @@ export function OutfitHero({ outfit, image: savedImage }: { outfit: Outfit; imag
           }}
           className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3.5 py-1.5 rounded-full bg-ivory/95 text-xs text-charcoal shadow hover:bg-white"
         >
-          Couldn&apos;t draw this look — retry
+          {reason === "credits"
+            ? "Look images are paused right now — try again later"
+            : reason === "busy"
+              ? "Image service busy — retry"
+              : "Couldn&apos;t draw this look — retry"}
         </button>
       </div>
     );

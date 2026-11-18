@@ -108,6 +108,9 @@ Requirements:
     console.error("Try-on generation error:", err);
     const message = err instanceof Error ? err.message : String(err);
 
+    if (/prepayment|credits are depleted|"code":402/i.test(message)) {
+      return { error: "Virtual try-on is temporarily unavailable. Please try again later." };
+    }
     if (message.includes("RESOURCE_EXHAUSTED") || message.includes('"code":429')) {
       return {
         error:
