@@ -16,6 +16,7 @@ import {
 } from "@/lib/types";
 import { CountryCode, detectCountryFromLocale } from "@/lib/locale";
 import { pickKey } from "@/lib/pieces";
+import { bandFromTemp, MANUAL_WEATHER_OPTIONS, seasonFromTemp, WeatherContext } from "@/lib/weather";
 
 interface ChatApiOutfitResult {
   outfit: Outfit;
@@ -33,6 +34,10 @@ interface AppState {
   savedLooks: SavedLook[];
   countryCode: CountryCode;
   countryCodeManuallySet: boolean;
+  /** Weather for the shopper's location (or what they told us). Only this summary is kept — never coordinates. */
+  weather: WeatherContext | null;
+  /** Whether we've asked for, got, or been refused the shopper's location this session. */
+  locationStatus: "unknown" | "granted" | "denied" | "unavailable";
   /** The generated hero image for each outfit on screen, keyed by outfit id. */
   outfitImages: Record<string, string>;
   /** The shopper's own garments for pieces in the outfits on screen, keyed by pickKey(outfitId, productId). */
@@ -50,6 +55,7 @@ interface AppState {
   detectCountry: () => void;
   setCountryCode: (country: CountryCode) => void;
   setTryOnPrefs: (patch: Partial<TryOnPrefs>) => void;
+  ensureWeather: (force?: boolean) => Promise<void>;
   setPick: (outfitId: string, productId: string, pick: GarmentPick | null) => void;
   setOutfitImage: (outfitId: string, image: string) => void;
   addWardrobeItem: (item: Omit<WardrobeItem, "id" | "addedAt">) => void;
@@ -64,7 +70,9 @@ async function callChatApi(
   profile: StyleProfile,
   currentOutfits: Outfit[],
   countryCode: CountryCode,
-  targetOutfitId?: string
+  targetOutfitId?: string,
+  weather?: WeatherContext | null,
+  locationDenied?: boolean
 ): Promise<{ reply: string; quickReplies?: string[]; profile: StyleProfile; outfits: ChatApiOutfitResult[] }> {
   const res = await fetch("/api/chat", {
     method: "POST",
@@ -75,6 +83,8 @@ async function callChatApi(
       currentOutfits,
       countryCode,
       targetOutfitId,
+      weather,
+      locationDenied,
     }),
   });
   const data = await res.json();
@@ -96,6 +106,8 @@ export const useAppStore = create<AppState>()(
       countryCodeManuallySet: false,
       picks: {},
       outfitImages: {},
+      weather: null,
+      locationStatus: "unknown",
       tryOnPrefs: emptyTryOnPrefs,
       loading: false,
       error: null,
@@ -117,6 +129,32 @@ export const useAppStore = create<AppState>()(
         }));
 
         try {
+          // A tapped weather answer ("Cold · under 6°C …") becomes the working weather.
+          // Match on the leading word so the stylist's own wording of the options still counts.
+          const tapped = MANUAL_WEATHER_OPTIONS.find((o) => text.startsWith(`${o.label.split(" ·")[0]} ·`));
+          if (tapped) {
+            set({
+              weather: {
+                city: null,
+                tempC: tapped.tempC,
+                feelsLikeC: tapped.tempC,
+                effectiveC: tapped.tempC,
+                band: bandFromTemp(tapped.tempC),
+                season: seasonFromTemp(tapped.tempC),
+                conditions: "as the shopper described",
+                rain: false,
+                snow: false,
+                forecast: [],
+                weekend: null,
+                source: "manual",
+                fetchedAt: new Date().toISOString(),
+              },
+            });
+          } else {
+            // First message of a visit: ask for location (browser prompt) and fetch the weather.
+            await get().ensureWeather();
+          }
+
           const { messages, profile, outfitsById, outfitOrder, countryCode } = get();
           const currentOutfits = outfitOrder.map((id) => outfitsById[id]).filter(Boolean);
           const { reply, quickReplies, profile: newProfile, outfits } = await callChatApi(
@@ -124,7 +162,9 @@ export const useAppStore = create<AppState>()(
             profile,
             currentOutfits,
             countryCode,
-            targetOutfitId
+            targetOutfitId,
+            get().weather,
+            get().locationStatus === "denied" || get().locationStatus === "unavailable"
           );
 
           const nextOutfitsById = { ...get().outfitsById };
@@ -195,6 +235,49 @@ export const useAppStore = create<AppState>()(
       setCountryCode: (country) => set({ countryCode: country, countryCodeManuallySet: true }),
 
       setTryOnPrefs: (patch) => set((s) => ({ tryOnPrefs: { ...s.tryOnPrefs, ...patch } })),
+
+      ensureWeather: async (force = false) => {
+        const { weather, locationStatus } = get();
+        const fresh = weather && Date.now() - Date.parse(weather.fetchedAt) < 3 * 60 * 60 * 1000;
+        if (!force && fresh) return;
+        if (!force && (locationStatus === "denied" || locationStatus === "unavailable")) return;
+        if (typeof navigator === "undefined" || !navigator.geolocation) {
+          set({ locationStatus: "unavailable" });
+          return;
+        }
+
+        // If the browser already remembers a refusal there will be no prompt — don't wait for one.
+        try {
+          const perm = await navigator.permissions?.query({ name: "geolocation" as PermissionName });
+          if (perm?.state === "denied") {
+            set({ locationStatus: "denied" });
+            return;
+          }
+        } catch {
+          // Permissions API unsupported (older Safari) — just try.
+        }
+
+        const position = await new Promise<GeolocationPosition | "denied" | "unavailable">((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            (p) => resolve(p),
+            (err) => resolve(err.code === err.PERMISSION_DENIED ? "denied" : "unavailable"),
+            { timeout: 10_000, maximumAge: 30 * 60 * 1000, enableHighAccuracy: false }
+          );
+        });
+        if (position === "denied" || position === "unavailable") {
+          set({ locationStatus: position });
+          return;
+        }
+
+        try {
+          const res = await fetch(`/api/weather?lat=${position.coords.latitude}&lon=${position.coords.longitude}`);
+          if (!res.ok) throw new Error("weather lookup failed");
+          set({ weather: (await res.json()) as WeatherContext, locationStatus: "granted" });
+        } catch {
+          // Location worked but the weather service didn't — fall back to asking.
+          set({ locationStatus: "unavailable" });
+        }
+      },
 
       setOutfitImage: (outfitId, image) => set((s) => ({ outfitImages: { ...s.outfitImages, [outfitId]: image } })),
 
@@ -281,6 +364,7 @@ export const useAppStore = create<AppState>()(
         countryCode: s.countryCode,
         countryCodeManuallySet: s.countryCodeManuallySet,
         tryOnPrefs: s.tryOnPrefs,
+        weather: s.weather,
       }),
     }
   )

@@ -56,9 +56,48 @@ const SEASONS_BY_SUBCATEGORY: Record<string, SeasonTag[]> = {
   Henley: NOT_WINTER,
 };
 
+/**
+ * Temperature range (°C) each piece type is sensible in. Seasons alone are too
+ * coarse — "Spring" covers both 8°C and 22°C, and shorts at 14°C is wrong —
+ * so recommendations for a known temperature are filtered against these.
+ * Types not listed work at any temperature.
+ */
+const COMFORT_C_BY_SUBCATEGORY: Record<string, [number, number]> = {
+  Shorts: [20, 50],
+  "Mini Skirt": [16, 50],
+  Sandals: [20, 50],
+  "Heeled Sandals": [18, 50],
+  "Slip Dress": [16, 50],
+  "Wide-Brim Hat": [18, 50],
+  Cap: [10, 50],
+  "T-Shirt": [14, 50],
+  "Polo Shirt": [14, 50],
+  Henley: [8, 30],
+  "Ballet Flats": [10, 50],
+  "Wool Coat": [-30, 14],
+  Beanie: [-30, 10],
+  Turtleneck: [-30, 17],
+  "Knit Top": [-30, 18],
+  "Flannel Shirt": [-30, 17],
+  "Knit Dress": [-30, 17],
+  "Knee-High Boots": [-30, 16],
+  "Ankle Boots": [-30, 20],
+  "Chelsea Boots": [-30, 20],
+  "Chukka Boots": [-30, 20],
+  "Leather Jacket": [5, 20],
+  "Suede Jacket": [4, 18],
+  Overshirt: [-5, 21],
+  "Silk Scarf": [-30, 18],
+  "Trench Coat": [3, 20],
+  "Bomber Jacket": [4, 20],
+  "Denim Jacket": [8, 26],
+  Blazer: [6, 28],
+};
+
 export const catalog: Product[] = (raw as Product[]).map((p) => ({
   ...p,
   seasonTags: SEASONS_BY_SUBCATEGORY[p.subcategory] ?? ["All Season"],
+  comfortC: COMFORT_C_BY_SUBCATEGORY[p.subcategory],
 }));
 
 export function getProductById(id: string): Product | undefined {

@@ -37,6 +37,7 @@ export function profileToOutfitRequest(
     locationHint: turn.locationHint ?? null,
     availableRetailers: turn.availableRetailers ?? null,
     season: turn.season ?? null,
+    temperatureC: turn.temperatureC ?? null,
     ownedItemNames: turn.ownedItemNames ?? [],
     count: turn.count ?? 3,
     liveTrends: turn.liveTrends ?? null,

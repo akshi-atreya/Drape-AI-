@@ -20,6 +20,7 @@ import {
 import { profileToOutfitRequest, mergeProfile } from "@/lib/style-profile";
 import { catalog } from "@/lib/catalog";
 import { CountryCode } from "@/lib/locale";
+import { seasonFromTemp, WeatherContext } from "@/lib/weather";
 
 /**
  * Tool surface exposed to the LLM. The model handles conversation, intent
@@ -57,6 +58,11 @@ export const toolDefinitions: Anthropic.Tool[] = [
         occasion: { type: ["string", "null"] },
         locationHint: { type: ["string", "null"], description: "City/trip mentioned by the user, e.g. 'NYC', 'Paris'." },
         season: { type: ["string", "null"], enum: [...SEASON_TAGS, null], description: "The season the outfit will be worn in. ALWAYS set this when the user states or implies one — a season ('winter'), a month or date, or a trip destination and time ('Europe in December' → Winter, 'Paris in October' → Fall, 'Bali in July' → Summer). Think about the destination's hemisphere and climate, not the user's current season. Only leave null if there is truly no clue." },
+        temperatureC: {
+          type: ["number", "null"],
+          description:
+            "Approximate temperature in °C the outfit will be worn in. Use the shopper's current/weekend weather from your context, or the weather they tell you about (Hot ≈ 32, Warm ≈ 25, Mild ≈ 17, Cool ≈ 9, Cold ≈ 0), or a typical temperature for a trip destination and month. This filters out pieces that make no sense at that temperature (e.g. shorts at 10°C, wool coats at 28°C), so ALWAYS pass it when you know it.",
+        },
         count: { type: "integer", minimum: 1, maximum: 4, default: 3 },
         styleTagsOverride: { type: "array", items: { type: "string", enum: STYLE_TAGS } },
         trendLevelOverride: { type: "number", minimum: 0, maximum: 1 },
@@ -126,6 +132,8 @@ export interface ToolRunContext {
   countryCode: CountryCode;
   /** Current trends from fashion publications (null when the live pipeline is unavailable). */
   liveTrends: Trend[] | null;
+  /** The shopper's current weather (from their location, or what they told us). */
+  weather: WeatherContext | null;
 }
 
 export function executeTool(
@@ -150,11 +158,25 @@ export function executeTool(
       ctx.profile = mergeProfile(ctx.profile, { gender });
     }
 
+    // Weather decides what's sensible to wear, so don't guess: use what the
+    // model passed, else the shopper's live weather, else make it ask.
+    const inputTemp = typeof input.temperatureC === "number" ? input.temperatureC : null;
+    const temperatureC = inputTemp ?? ctx.weather?.effectiveC ?? null;
+    const inputSeason = (input.season as string | null) ?? null;
+    const season = inputSeason ?? (temperatureC != null ? seasonFromTemp(temperatureC) : null);
+    if (temperatureC == null && !season) {
+      return {
+        error:
+          "Weather is unknown, so you can't pick appropriate pieces yet. Do NOT call find_outfits. Ask the shopper what the weather is like (or where/when they're going) via respond_to_user with quickReplies: [\"Hot · 30°C+ / 86°F+\", \"Warm · 22–29°C / 72–84°F\", \"Mild · 14–21°C / 57–70°F\", \"Cool · 6–13°C / 43–55°F\", \"Cold · under 6°C / 43°F\"]. Then call find_outfits with temperatureC (Hot=32, Warm=25, Mild=17, Cool=9, Cold=0).",
+      };
+    }
+
     const req = profileToOutfitRequest(ctx.profile, {
       gender,
             occasion: (input.occasion as string | null) ?? null,
       locationHint: (input.locationHint as string | null) ?? null,
-      season: (input.season as string | null) ?? null,
+      season,
+      temperatureC,
       count: (input.count as number) ?? 3,
       liveTrends: ctx.liveTrends,
       styleTags: (input.styleTagsOverride as StyleTag[] | undefined) ?? undefined,
@@ -192,6 +214,8 @@ export function executeTool(
     const instruction = parseRemixInstruction((input.instruction as string) ?? "");
     const req = profileToOutfitRequest(ctx.profile, {
       occasion: base.occasion,
+      season: base.season ?? null,
+      temperatureC: base.temperatureC ?? ctx.weather?.effectiveC ?? null,
       liveTrends: ctx.liveTrends,
     });
     const updated = remixOutfit(catalog, base, instruction, req);
@@ -227,6 +251,7 @@ Core rules:
 - Build complete outfits, never isolated single-item recommendations, unless the user explicitly asks for one item.
 - If the user mentions a budget, acknowledge it kindly and say that they'll set the final price themselves when they pick pieces — suggest styling choices (e.g. where a simple piece works as well as a statement one), but don't promise prices.
 - When the user states a lasting preference (style, disliked colors, fit), call update_style_profile.
+- Weather matters more than almost anything for what to wear. Never recommend a look without knowing the temperature it's for: use the weather in your context, the weather the user tells you, or a destination's typical weather. If you don't know, ask — with quickReplies, never an open question — before calling find_outfits (the tool will refuse otherwise). When the user taps a weather answer like "Cold · under 6°C", treat it as the weather and go straight to find_outfits with the matching temperatureC.
 - When ready to present outfits, call find_outfits, and always pass the season if the user gave any seasonal clue (see the tool description) — don't leave a winter trip to chance.
 - When the user wants to adjust an existing outfit (swap a piece, make it more casual/feminine/warmer, keep certain pieces), call remix_outfit with the outfitId from the outfits currently on screen and the instruction close to verbatim. Never regenerate from scratch for a remix request.
 - After presenting outfits for the first time, briefly remind them (one short sentence, once) that they can tap "Add yours" on any piece to paste a product link, then try the look on.

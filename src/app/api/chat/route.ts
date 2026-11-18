@@ -4,6 +4,7 @@ import { emptyStyleProfile, Outfit, StyleProfile } from "@/lib/types";
 import { executeTool, SYSTEM_PROMPT, toolDefinitions, ToolRunContext } from "@/lib/chat-tools";
 import { CountryCode } from "@/lib/locale";
 import { getLiveTrends } from "@/lib/live-trends";
+import { MANUAL_WEATHER_OPTIONS, WeatherContext, weatherPromptBlock } from "@/lib/weather";
 
 export const runtime = "nodejs";
 // Model calls can take a while; Vercel's default function timeout is shorter.
@@ -18,6 +19,48 @@ interface ChatRequestBody {
   currentOutfits: Outfit[];
   targetOutfitId?: string;
   countryCode?: CountryCode;
+  /** Weather summary (never coordinates) from the shopper's location, if they shared it. */
+  weather?: WeatherContext | null;
+  /** True if we asked for location and the shopper declined / it was unavailable. */
+  locationDenied?: boolean;
+}
+
+/** The weather arrives from the browser, so re-validate it before it reaches the prompt or the engine. */
+function cleanWeather(w: unknown): WeatherContext | null {
+  if (!w || typeof w !== "object") return null;
+  const x = w as Partial<WeatherContext>;
+  const num = (v: unknown, lo: number, hi: number) => (typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi ? v : null);
+  const tempC = num(x.tempC, -60, 60);
+  const feelsLikeC = num(x.feelsLikeC, -80, 70);
+  const effectiveC = num(x.effectiveC, -60, 60);
+  if (tempC == null || feelsLikeC == null || effectiveC == null) return null;
+  const text = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/[^\p{L}\p{N}\s,.'°/()-]/gu, "").slice(0, max) : "");
+  const bands = ["cold", "cool", "mild", "warm", "hot"];
+  const seasons = ["Winter", "Fall", "Spring", "Summer"];
+  return {
+    city: x.city ? text(x.city, 60) || null : null,
+    tempC,
+    feelsLikeC,
+    effectiveC,
+    band: bands.includes(x.band as string) ? (x.band as WeatherContext["band"]) : "mild",
+    season: seasons.includes(x.season as string) ? (x.season as WeatherContext["season"]) : "Spring",
+    conditions: text(x.conditions, 40) || "unknown",
+    rain: x.rain === true,
+    snow: x.snow === true,
+    forecast: (Array.isArray(x.forecast) ? x.forecast : []).slice(0, 5).map((d) => ({
+      label: text(d?.label, 12),
+      highC: num(d?.highC, -60, 60) ?? 0,
+      lowC: num(d?.lowC, -60, 60) ?? 0,
+      conditions: text(d?.conditions, 40),
+      rain: d?.rain === true,
+    })),
+    weekend:
+      x.weekend && num(x.weekend.tempC, -60, 60) != null
+        ? { tempC: x.weekend.tempC as number, summary: text(x.weekend.summary, 120) }
+        : null,
+    source: x.source === "manual" ? "manual" : "location",
+    fetchedAt: typeof x.fetchedAt === "string" ? x.fetchedAt.slice(0, 40) : "",
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -42,6 +85,7 @@ export async function POST(req: NextRequest) {
   const anthropic = new Anthropic({ apiKey });
 
   const countryCode: CountryCode = body.countryCode ?? "US";
+  const weather = cleanWeather(body.weather);
   // Current trends from fashion publications. Cached for hours; if the cache is cold we don't make the shopper wait for a rebuild.
   const trendData = await getLiveTrends(2500);
   const ctx: ToolRunContext = {
@@ -52,6 +96,7 @@ export async function POST(req: NextRequest) {
     freshSetIds: new Set(),
     countryCode,
     liveTrends: trendData.live ? trendData.trends : null,
+    weather,
   };
 
   const conversation: Anthropic.MessageParam[] = (body.messages ?? []).map((m) => ({
@@ -70,7 +115,9 @@ export async function POST(req: NextRequest) {
         .join("\n")}\nWhen it genuinely fits, tell the user which current trend a look draws on, by name and in your own words — never invent a trend that isn't listed, and don't quote articles.`
     : "";
 
-  const system = `${SYSTEM_PROMPT}${trendContext}${targetContext}`;
+  const weatherContext = weatherPromptBlock(weather, !body.locationDenied);
+
+  const system = `${SYSTEM_PROMPT}${weatherContext}${trendContext}${targetContext}`;
 
   let finalMessage = "";
   const outfitExplanations = new Map<string, string>();
@@ -178,6 +225,15 @@ export async function POST(req: NextRequest) {
     /menswear|womenswear|men'?s|women'?s/i.test(finalMessage)
   ) {
     quickReplies = ["Womenswear", "Menswear", "No preference"];
+  }
+  // Same guarantee for the weather question: always offer tappable answers.
+  if (
+    quickReplies.length === 0 &&
+    outfits.length === 0 &&
+    !weather &&
+    /weather|temperature|how (cold|warm|hot)|climate/i.test(finalMessage)
+  ) {
+    quickReplies = MANUAL_WEATHER_OPTIONS.map((o) => o.label);
   }
   // Buttons only make sense alongside a question, not next to finished looks.
   if (outfits.length > 0) quickReplies = [];

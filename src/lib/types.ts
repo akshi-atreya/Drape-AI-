@@ -122,6 +122,8 @@ export interface Product {
   styleTags: StyleTag[];
   occasionTags: OccasionTag[];
   seasonTags: SeasonTag[];
+  /** Temperature range (°C) the piece is sensible in; derived from the piece type. */
+  comfortC?: [number, number];
   trendTags: TrendTag[];
   trendScores: Partial<Record<TrendTag, number>>;
 }
@@ -194,6 +196,9 @@ export interface Outfit {
   totalPrice: number;
   budget: number | null;
   explanation: string;
+  /** Weather the outfit was built for (so remixes keep it). */
+  temperatureC?: number | null;
+  season?: string | null;
   scoreBreakdown?: {
     styleCompatibility: number;
     colorHarmony: number;

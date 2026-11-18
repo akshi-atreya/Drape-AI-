@@ -6,6 +6,7 @@ import { useAppStore } from "@/store/useAppStore";
 import { ChatComposer } from "@/components/ChatComposer";
 import { ChatMessageBubble } from "@/components/ChatMessageBubble";
 import { TryOnModal } from "@/components/TryOnModal";
+import { fmtTemp } from "@/lib/weather";
 
 export function ChatView() {
   const messages = useAppStore((s) => s.messages);
@@ -14,6 +15,8 @@ export function ChatView() {
   const error = useAppStore((s) => s.error);
   const savedLooks = useAppStore((s) => s.savedLooks);
   const resetChat = useAppStore((s) => s.resetChat);
+  const weather = useAppStore((s) => s.weather);
+  const ensureWeather = useAppStore((s) => s.ensureWeather);
 
   const [tryOnOutfit, setTryOnOutfit] = useState<Outfit | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -31,7 +34,21 @@ export function ChatView() {
   return (
     <div className="flex-1 flex flex-col max-w-4xl w-full mx-auto">
       <div className="flex items-center justify-between px-6 md:px-0 pt-6 pb-2">
-        <p className="text-xs uppercase tracking-wide text-gray">Your AI Stylist</p>
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <p className="text-xs uppercase tracking-wide text-gray">Your AI Stylist</p>
+          {weather && (
+            <p className="text-xs text-charcoal-soft truncate">
+              {weather.source === "location" ? (weather.city ? `${weather.city} · ` : "") : "You said · "}
+              {fmtTemp(weather.effectiveC)}
+              {weather.rain ? " · rain" : weather.snow ? " · snow" : ""} · dressing for {weather.season.toLowerCase()}
+              {weather.source === "location" && (
+                <button onClick={() => ensureWeather(true)} className="ml-2 underline underline-offset-2 text-gray hover:text-charcoal">
+                  refresh
+                </button>
+              )}
+            </p>
+          )}
+        </div>
         <button onClick={resetChat} className="text-xs text-gray hover:text-charcoal transition-colors">
           New conversation
         </button>

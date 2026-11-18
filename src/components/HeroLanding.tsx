@@ -26,6 +26,10 @@ export function HeroLanding() {
         <ChatComposer variant="hero" onSubmit={sendMessage} loading={loading} />
       </div>
 
+      <p className="animate-in text-xs text-gray mt-3 max-w-sm mx-auto" style={{ animationDelay: "120ms" }}>
+        I&apos;ll check your local weather so the looks fit the day. Your location is only used for that — it&apos;s never stored.
+      </p>
+
       <div className="animate-in mt-6" style={{ animationDelay: "150ms" }}>
         <SuggestedChips onSelect={sendMessage} />
       </div>

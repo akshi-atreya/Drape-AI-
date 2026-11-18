@@ -65,6 +65,8 @@ export interface OutfitRequest {
   brandsLike: string[];
   brandsAvoid: string[];
   season: string | null;
+  /** Expected temperature (°C) the outfit will be worn in; null = unknown (fall back to season only). */
+  temperatureC: number | null;
   ownedItemNames: string[];
   count: number;
   /** Trends extracted from current fashion publications; null = fall back to the catalog's built-in trend scores. */
@@ -84,6 +86,7 @@ export const defaultOutfitRequest: OutfitRequest = {
   brandsLike: [],
   brandsAvoid: [],
   season: null,
+  temperatureC: null,
   ownedItemNames: [],
   count: 3,
   liveTrends: null,
@@ -252,7 +255,14 @@ function filterCatalog(catalog: Product[], req: OutfitRequest): Product[] {
       const seasonMatch = p.seasonTags.some((t) => t === req.season) || p.seasonTags.includes("All Season");
       if (!seasonMatch) return false;
     }
-    if (formalityTarget != null) {
+    if (req.temperatureC != null && p.comfortC) {
+      // A degree of slack either side so the pool isn't razor-thin at the boundaries.
+      if (req.temperatureC < p.comfortC[0] - 1 || req.temperatureC > p.comfortC[1] + 1) return false;
+    }
+    // In the cold a coat is non-negotiable, so outerwear skips the occasion-formality
+    // filter below 12°C (a wool coat is still right for a casual vacation day at 3°C).
+    const outerwearInCold = p.category === "Jackets" && req.temperatureC != null && req.temperatureC < 12;
+    if (formalityTarget != null && !outerwearInCold) {
       const diff = Math.abs(FORMALITY_ORDER[p.formality] - formalityTarget);
       if (diff > FORMALITY_MATCH_THRESHOLD) return false;
     }
@@ -374,9 +384,14 @@ export function generateOutfits(catalog: Product[], req: OutfitRequest): Outfit[
   // exactly the kind of same-y result this fixes.
   const preferDress =
     req.styleTags.includes("Feminine") || req.styleTags.includes("Romantic") || (formalityTarget != null && formalityTarget >= 1.8);
-  const preferLight = formalityTarget != null && formalityTarget <= 0.6;
+  // Weather outranks occasion for outerwear: below ~12°C every look gets a coat or
+  // jacket (a casual "weekend" look is otherwise jacket-free), and in real heat none do.
+  const cold = req.temperatureC != null && req.temperatureC < 12;
+  const hot = req.temperatureC != null && req.temperatureC >= 24;
+  const preferLight = hot || (!cold && formalityTarget != null && formalityTarget <= 0.6);
 
-  const orderedRecipes = [...availableRecipes].sort((a, b) => {
+  const outerwearRecipes = availableRecipes.filter((r) => r.roles.includes("Jackets"));
+  const orderedRecipes = [...(cold && outerwearRecipes.length ? outerwearRecipes : availableRecipes)].sort((a, b) => {
     const priority = (r: Recipe) => {
       const hasDress = r.roles.includes("Dresses");
       const hasJacket = r.roles.includes("Jackets");
@@ -389,7 +404,10 @@ export function generateOutfits(catalog: Product[], req: OutfitRequest): Outfit[
   const globallyUsed = new Set<string>();
   let recipeIdx = 0;
 
-  while (outfits.length < req.count && recipeIdx < orderedRecipes.length * 2) {
+  // Allow enough passes that a short recipe list (e.g. menswear in the cold, which has one
+  // jacket recipe) can still fill the requested count with different pieces.
+  const maxPasses = Math.max(orderedRecipes.length * 2, req.count * 3);
+  while (outfits.length < req.count && recipeIdx < maxPasses) {
     const recipe = orderedRecipes[recipeIdx % orderedRecipes.length];
     recipeIdx++;
 
@@ -406,6 +424,8 @@ export function generateOutfits(catalog: Product[], req: OutfitRequest): Outfit[
       items,
       totalPrice: outfitTotal(items),
       budget: req.budget,
+      temperatureC: req.temperatureC,
+      season: req.season,
       explanation: "", // filled in by the chat route using the LLM
     });
   }
