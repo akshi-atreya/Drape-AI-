@@ -73,6 +73,11 @@ export default function SignInPage() {
               onChange={(e) => setPassword(e.target.value)}
               className="w-full bg-white border border-beige-dark rounded-xl px-4 py-2.5 text-base md:text-sm outline-none focus:ring-1 focus:ring-charcoal"
             />
+            <div className="text-right">
+              <Link href="/forgot-password" className="text-xs text-gray hover:text-charcoal underline underline-offset-2">
+                Forgot password?
+              </Link>
+            </div>
           </div>
 
           {error && <p className="text-sm text-accent">{error}</p>}

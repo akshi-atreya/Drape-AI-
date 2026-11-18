@@ -19,6 +19,8 @@ export const authConfig = {
       const isPublicRoute =
         path.startsWith("/sign-in") ||
         path.startsWith("/sign-up") ||
+        path.startsWith("/forgot-password") ||
+        path.startsWith("/reset-password") ||
         path.startsWith("/api/auth") ||
         path.startsWith("/api/stats") ||
         path.startsWith("/api/cron") || // secret-protected; Vercel Cron has no session

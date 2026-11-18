@@ -41,8 +41,9 @@ let schemaReady: Promise<void> | null = null;
 /** Idempotent — safe to call before every query; cheap after the first. */
 export function ensureSchema(): Promise<void> {
   if (!schemaReady) {
-    schemaReady = getPool()
-      .sql`
+    const pool = getPool();
+    schemaReady = (async () => {
+      await pool.sql`
         CREATE TABLE IF NOT EXISTS users (
           id TEXT PRIMARY KEY,
           email TEXT UNIQUE NOT NULL,
@@ -50,8 +51,23 @@ export function ensureSchema(): Promise<void> {
           hashed_password TEXT NOT NULL,
           created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         );
-      `
-      .then(() => undefined);
+      `;
+      // One-time password-reset links. Only a SHA-256 hash of the token is
+      // stored, so a database leak can't be used to reset anyone's password.
+      await pool.sql`
+        CREATE TABLE IF NOT EXISTS password_resets (
+          token_hash TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          expires_at TIMESTAMPTZ NOT NULL,
+          used_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+      `;
+    })();
+    // A failed first attempt (e.g. DB briefly unreachable) shouldn't poison every later call.
+    schemaReady.catch(() => {
+      schemaReady = null;
+    });
   }
   return schemaReady;
 }
