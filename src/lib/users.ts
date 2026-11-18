@@ -52,12 +52,6 @@ export async function createUser(input: { email: string; password: string; name?
   return { id, email, name: input.name ?? null };
 }
 
-export async function updatePassword(userId: string, newPassword: string): Promise<void> {
-  await ensureSchema();
-  const hashedPassword = bcrypt.hashSync(newPassword, SALT_ROUNDS);
-  await sql`UPDATE users SET hashed_password = ${hashedPassword} WHERE id = ${userId}`;
-}
-
 export function verifyPassword(user: User, password: string): boolean {
   return bcrypt.compareSync(password, user.hashedPassword);
 }

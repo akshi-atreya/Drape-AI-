@@ -53,8 +53,6 @@ export async function GET() {
     gemini_key_set: present("GEMINI_API_KEY"),
     auth_secret_set: present("AUTH_SECRET"),
     database_url_set: ["POSTGRES_URL", "DATABASE_URL", "POSTGRES_PRISMA_URL"].some(present),
-    resend_key_set: present("RESEND_API_KEY"),
-    email_from_set: present("EMAIL_FROM"),
     cron_secret_set: present("CRON_SECRET"),
     environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV,
   });
