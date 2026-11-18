@@ -5,9 +5,10 @@ import { NewsCard } from "@/components/NewsCard";
 // Rendered per request; getLiveTrends() itself caches the (slow, paid) feed
 // fetch + extraction for hours, so visitors don't each trigger it.
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // lets a background rebuild (feeds + model call, ~25s) finish after the response
 
 export default async function TrendsPage() {
-  const { trends, news, live, updatedAt, outlets } = await getLiveTrends();
+  const { trends, news, live, updatedAt, outlets, refreshing } = await getLiveTrends(3500);
 
   return (
     <div className="max-w-6xl mx-auto w-full px-6 md:px-10 py-14 space-y-20">
@@ -22,7 +23,9 @@ export default async function TrendsPage() {
           <p className="text-xs text-gray">
             {live && updatedAt
               ? `Updated ${new Date(updatedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} from ${outlets.join(", ")}. Trend summaries are written by FitCast AI; articles link back to the original.`
-              : "Live trend feed unavailable right now — showing our curated edit."}
+              : refreshing
+                ? "Fresh trends from this week's fashion coverage are being prepared — refresh in about a minute. Showing our curated edit for now."
+                : "Live trend feed unavailable right now — showing our curated edit."}
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

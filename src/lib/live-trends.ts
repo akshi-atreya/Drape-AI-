@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { unstable_cache } from "next/cache";
+import { after } from "next/server";
 import { catalog } from "@/lib/catalog";
 import { COLOR_HEX } from "@/lib/colors";
 import { FeedItem, fetchFeedItems, FEEDS } from "@/lib/trend-sources";
@@ -33,6 +34,8 @@ export interface LiveTrendData {
   /** True when built from current publications; false = hand-written fallback. */
   live: boolean;
   outlets: string[];
+  /** True when we returned the fallback only because a fresh build was still running; it will be ready shortly. */
+  refreshing?: boolean;
 }
 
 const reportTool: Anthropic.Tool = {
@@ -139,7 +142,8 @@ async function buildOnce(): Promise<LiveTrendData> {
     const t = raw as Record<string, unknown>;
     const name = str(t.name, 40);
     const pieceTypes = asArray(t.pieceTypes).filter((p): p is string => typeof p === "string" && pieceSet.has(p));
-    if (!name || pieceTypes.length === 0) continue;
+    const colorsRaw = asArray(t.colors);
+    if (!name) continue;
     const sources: TrendSource[] = [];
     for (const idx of asArray(t.evidence)) {
       const it: FeedItem | undefined = typeof idx === "number" ? shown[idx] : undefined;
@@ -149,7 +153,9 @@ async function buildOnce(): Promise<LiveTrendData> {
       if (!sources.some((s) => s.url === it.url)) sources.push({ outlet: it.outlet, title: it.title, url: it.url });
       if (sources.length >= 3) break;
     }
-    const colors = asArray(t.colors).filter((c): c is string => typeof c === "string" && colorSet.has(c));
+    const colors = colorsRaw.filter((c): c is string => typeof c === "string" && colorSet.has(c));
+    // A trend that maps onto none of our piece types or colors can still be shown, but can't steer recommendations.
+    if (pieceTypes.length === 0 && colors.length === 0 && !str(t.shortExplanation, 240)) continue;
     trends.push({
       id: `live-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
       name,
@@ -164,7 +170,9 @@ async function buildOnce(): Promise<LiveTrendData> {
       sources,
     });
   }
-  if (trends.length < 3) throw new Error("Too few valid trends extracted");
+  if (trends.length < 3) {
+    throw new Error(`Too few valid trends extracted (raw=${asArray(out.trends).length}, stop=${response.stop_reason}, type=${typeof out.trends})`);
+  }
   trends.sort((a, b) => (b.strength ?? 0) - (a.strength ?? 0));
 
   const news: NewsArticle[] = [];
@@ -230,8 +238,8 @@ const cachedBuild = unstable_cache(buildLiveTrends, ["live-trends-v1"], {
 let failedAt = 0;
 const RETRY_AFTER_MS = 10 * 60 * 1000;
 
-function fallback(): LiveTrendData {
-  return { trends: fallbackTrends, news: seedNews, updatedAt: null, live: false, outlets: [] };
+function fallback(refreshing = false): LiveTrendData {
+  return { trends: fallbackTrends, news: seedNews, updatedAt: null, live: false, outlets: [], refreshing };
 }
 
 /**
@@ -245,11 +253,23 @@ export async function getLiveTrends(maxWaitMs?: number): Promise<LiveTrendData> 
   try {
     const pending = cachedBuild();
     if (maxWaitMs == null) return await pending;
-    pending.catch(() => {}); // a late failure is handled below on the next call
-    return await Promise.race([
+    // Don't make the visitor wait through a cold rebuild (~25s). Answer with
+    // the fallback now and let the rebuild finish in the background, so the
+    // next request is served instantly from cache.
+    pending.catch(() => {});
+    try {
+      after(async () => {
+        await pending.catch(() => {});
+      });
+    } catch {
+      // `after` only works inside a request; elsewhere the promise just continues.
+    }
+    const timedOut = Symbol("timeout");
+    const result = await Promise.race([
       pending,
-      new Promise<LiveTrendData>((resolve) => setTimeout(() => resolve(fallback()), maxWaitMs)),
+      new Promise<typeof timedOut>((resolve) => setTimeout(() => resolve(timedOut), maxWaitMs)),
     ]);
+    return result === timedOut ? fallback(true) : result;
   } catch (err) {
     failedAt = Date.now();
     console.error("Live trends unavailable, using the hand-written fallback:", err instanceof Error ? err.message : err);
