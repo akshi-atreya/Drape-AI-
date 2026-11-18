@@ -17,8 +17,8 @@ export function HeroLanding() {
           powered by AI.
         </h1>
         <p className="text-charcoal-soft text-base md:text-lg max-w-lg mx-auto pt-2">
-          Tell me the occasion. I&apos;ll design the look, you pick the pieces you love
-          from any store, and I&apos;ll show you how it looks on you.
+          Tell me the occasion. I&apos;ll design a complete look for the weather and the
+          moment, then show you how it looks on you.
         </p>
       </div>
 
@@ -35,7 +35,7 @@ export function HeroLanding() {
       </div>
 
       <p className="animate-in text-xs text-gray mt-14 tracking-wide" style={{ animationDelay: "220ms" }}>
-        Works with any store. Paste a link, see it on you.
+        Weather-smart. Trend-aware. See it on you.
       </p>
     </div>
   );

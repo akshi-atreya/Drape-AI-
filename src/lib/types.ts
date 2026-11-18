@@ -155,11 +155,6 @@ export const emptyStyleProfile: StyleProfile = {
   occasions: [],
 };
 
-/**
- * A real garment the shopper chose themselves — a product photo pulled from
- * a link they pasted, or an image they uploaded. FitCast AI recommends piece
- * *types*; the shopper supplies the actual item, and try-on uses its photo.
- */
 export type BodyBuild = "Slim" | "Average" | "Athletic" | "Curvy" | "Plus-size";
 export const BODY_BUILDS: BodyBuild[] = ["Slim", "Average", "Athletic", "Curvy", "Plus-size"];
 
@@ -175,13 +170,6 @@ export interface TryOnPrefs {
 }
 
 export const emptyTryOnPrefs: TryOnPrefs = { gender: null, build: null, height: "" };
-
-export interface GarmentPick {
-  imageDataUrl: string;
-  /** Page the garment came from, if it was added by link. */
-  sourceUrl?: string;
-  title?: string;
-}
 
 export interface OutfitItem {
   product: Product;
@@ -220,8 +208,6 @@ export interface SavedLook {
   id: string;
   type: "outfit" | "product" | "trend";
   outfit?: Outfit;
-  /** The shopper's chosen garments for this outfit, keyed by product id. */
-  picks?: Record<string, GarmentPick>;
   /** The illustrative image generated for this outfit (JPEG data URL). */
   image?: string;
   product?: Product;

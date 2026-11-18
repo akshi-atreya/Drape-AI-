@@ -3,8 +3,8 @@ import { GoogleGenAI } from "@google/genai";
 /**
  * One illustrative image of a whole recommended outfit, generated from the
  * pieces' exact colors and cuts. Replaces per-piece stock photos, which
- * routinely showed the wrong garment or color. It's an *idea* of the look —
- * shoppers still pick the real items themselves.
+ * routinely showed the wrong garment or color. It's an *idea* of the look,
+ * built from the pieces' exact colors and cuts.
  */
 
 const MODEL = "gemini-3.1-flash-image";

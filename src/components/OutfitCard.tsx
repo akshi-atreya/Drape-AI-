@@ -4,10 +4,9 @@ import { useState } from "react";
 import { Outfit } from "@/lib/types";
 import { PieceThumb } from "@/components/PieceThumb";
 import { OutfitHero } from "@/components/OutfitHero";
-import { PickPanel } from "@/components/PickPanel";
 import { useAppStore } from "@/store/useAppStore";
 import { getShoppingSearchUrl } from "@/lib/locale";
-import { pickKey, pieceDetail, pieceSearchQuery, pieceTitle } from "@/lib/pieces";
+import { pieceDetail, pieceSearchQuery, pieceTitle } from "@/lib/pieces";
 
 const REMIX_CHIPS = [
   "Make it more casual",
@@ -31,9 +30,6 @@ export function OutfitCard({
   const loading = useAppStore((s) => s.loading);
   const countryCode = useAppStore((s) => s.countryCode);
   const profileGender = useAppStore((s) => s.profile.gender);
-  const picks = useAppStore((s) => s.picks);
-  const setPick = useAppStore((s) => s.setPick);
-  const [pickingId, setPickingId] = useState<string | null>(null);
   const [remixOpen, setRemixOpen] = useState(false);
   const [remixText, setRemixText] = useState("");
   const [justSaved, setJustSaved] = useState(false);
@@ -41,8 +37,6 @@ export function OutfitCard({
   const isSaved = savedIds.has(outfit.id) || justSaved;
 
   const items = outfit.items;
-  const pickFor = (productId: string) => picks[pickKey(outfit.id, productId)];
-  const pickedCount = items.filter((it) => pickFor(it.product.id)).length;
 
   const handleRemix = (text: string) => {
     if (!text.trim() || loading) return;
@@ -70,64 +64,29 @@ export function OutfitCard({
 
         <div className="space-y-1">
           <p className="text-xs uppercase tracking-wide text-gray">The pieces</p>
-          <p className="text-xs text-gray">
-            Find each one at any store, then paste its link to try the real thing on.
-          </p>
+          <p className="text-xs text-gray">Tap &ldquo;Find it&rdquo; to shop a piece, or see the whole look on you.</p>
         </div>
 
         <ul className="divide-y divide-beige-dark/60 -mx-1 -mt-2">
-          {items.map((it) => {
-            const pick = pickFor(it.product.id);
-            const open = pickingId === it.product.id;
-            return (
-              <li key={it.product.id} className="py-2.5 px-1 space-y-2">
-                <div className="flex items-center gap-3">
-                  <PieceThumb product={it.product} pick={pick} compact className="w-11 h-11 rounded-md shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-charcoal truncate">{pieceTitle(it.product)}</p>
-                    <p className="text-xs text-gray truncate">
-                      {pick ? <span className="text-charcoal-soft">✓ Your pick{pick.title ? ` — ${pick.title}` : ""}</span> : pieceDetail(it.product)}
-                    </p>
-                  </div>
-                  <div className="text-right shrink-0 space-y-0.5">
-                    <span className="flex justify-end gap-2.5">
-                      {pick && (
-                        <button
-                          onClick={() => setPick(outfit.id, it.product.id, null)}
-                          className="text-xs text-gray hover:text-accent"
-                        >
-                          Remove
-                        </button>
-                      )}
-                      <button
-                        onClick={() => setPickingId(open ? null : it.product.id)}
-                        className="text-xs text-accent hover:underline"
-                      >
-                        {pick ? "Change" : "Add yours"}
-                      </button>
-                    </span>
-                    <a
-                      href={getShoppingSearchUrl(pieceSearchQuery(it.product), profileGender, countryCode)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block text-xs text-gray hover:text-charcoal hover:underline"
-                    >
-                      Find it ↗
-                    </a>
-                  </div>
+          {items.map((it) => (
+            <li key={it.product.id} className="py-2.5 px-1">
+              <div className="flex items-center gap-3">
+                <PieceThumb product={it.product} compact className="w-11 h-11 rounded-md shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-charcoal truncate">{pieceTitle(it.product)}</p>
+                  <p className="text-xs text-gray truncate">{pieceDetail(it.product)}</p>
                 </div>
-                {open && (
-                  <PickPanel
-                    onClose={() => setPickingId(null)}
-                    onPick={(p) => {
-                      setPick(outfit.id, it.product.id, p);
-                      setPickingId(null);
-                    }}
-                  />
-                )}
-              </li>
-            );
-          })}
+                <a
+                  href={getShoppingSearchUrl(pieceSearchQuery(it.product), profileGender, countryCode)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 text-xs text-accent hover:underline"
+                >
+                  Find it ↗
+                </a>
+              </div>
+            </li>
+          ))}
         </ul>
 
         {outfit.explanation && (
@@ -142,7 +101,7 @@ export function OutfitCard({
             onClick={() => onTryOn(outfit)}
             className="col-span-2 md:col-auto px-2 md:px-4 py-2.5 md:py-2 rounded-full bg-charcoal text-ivory text-sm hover:bg-charcoal-soft transition-colors"
           >
-            {pickedCount > 0 ? `Try it on (${pickedCount} of ${items.length} yours)` : "Try it on"}
+            Try it on
           </button>
           <button
             onClick={() => setRemixOpen((v) => !v)}

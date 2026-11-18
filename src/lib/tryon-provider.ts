@@ -2,10 +2,9 @@ import { GoogleGenAI } from "@google/genai";
 
 /**
  * Real virtual try-on via Gemini's image model (gemini-3.1-flash-image).
- * FitCast AI recommends garment types; the shopper attaches the actual product
- * photo for each piece (pasted link or upload). Those photos are passed to
- * the model alongside the person's photo so it dresses them in the real
- * garments. Any piece without a photo falls back to a text description.
+ * The model gets the shopper's photo plus a precise description of each piece
+ * in the recommended outfit (color, cut, fit, silhouette) and dresses them in
+ * it, keeping their face and identity.
  */
 
 const MODEL = "gemini-3.1-flash-image";
@@ -23,10 +22,8 @@ export interface TryOnSubject {
 }
 
 export interface TryOnPiece {
-  /** What the piece is, e.g. "charcoal satin blouse (cropped fit)". */
+  /** What the piece is, e.g. "charcoal blouse (cropped fit, flowy silhouette)". */
   description: string;
-  /** The shopper's own photo of the real garment, if they added one. */
-  imageDataUrl?: string;
 }
 
 function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | null {
@@ -53,20 +50,7 @@ export async function generateTryOnImage(
     return { error: "That photo couldn't be read. Please try a different image." };
   }
 
-  // Reference images, in order: the person first, then each supplied garment.
-  const garmentImages: { piece: TryOnPiece; image: { mimeType: string; data: string } }[] = [];
-  const describedOnly: TryOnPiece[] = [];
-  for (const piece of pieces) {
-    const parsed = piece.imageDataUrl ? parseDataUrl(piece.imageDataUrl) : null;
-    if (parsed) garmentImages.push({ piece, image: parsed });
-    else describedOnly.push(piece);
-  }
-
-  const lines: string[] = [];
-  garmentImages.forEach((g, i) => {
-    lines.push(`- Garment image ${i + 2} (${g.piece.description}): put this exact garment on the person — match its real color, fabric, cut, pattern, and details from the photo.`);
-  });
-  describedOnly.forEach((p) => lines.push(`- ${p.description} (no photo — use the description).`));
+  const lines = pieces.map((p) => `- ${p.description}`);
 
   const subjectLines: string[] = [];
   if (subject.gender) subjectLines.push(subject.gender === "Women" ? "- The person is a woman." : "- The person is a man.");
@@ -84,7 +68,7 @@ export async function generateTryOnImage(
 ${lines.join("\n")}
 ${subjectBlock}
 Requirements:
-- The garment photos may show the item on a hanger, flat-lay, or on another model — use only the garment itself, not any model, mannequin, background, or watermark in those photos.
+- Show every listed piece clearly, in the exact color and cut described. Do not add other garments, and do not change a piece's color.
 - Keep the person's face, skin tone, hair, and identity clearly recognizable and consistent with Image 1.
 - Show the ENTIRE outfit from head to toe — full body, feet included, vertical portrait framing, nothing cropped.
 - Pose them standing naturally like a fashion model or lookbook photo: relaxed, upright, facing the camera or in a natural three-quarter turn — NOT the pose/crop/angle from Image 1.
@@ -99,7 +83,6 @@ Requirements:
       model: MODEL,
       contents: [
         { inlineData: { mimeType: photo.mimeType, data: photo.data } },
-        ...garmentImages.map((g) => ({ inlineData: { mimeType: g.image.mimeType, data: g.image.data } })),
         { text: prompt },
       ],
       config: {

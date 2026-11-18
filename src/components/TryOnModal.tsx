@@ -7,7 +7,7 @@ import { TryOnTuner } from "@/components/TryOnTuner";
 import { UploadErrorDialog } from "@/components/UploadErrorDialog";
 import { describeCameraError, loadImageFile, UploadProblem, UploadProblemError } from "@/lib/image-utils";
 import { useAppStore } from "@/store/useAppStore";
-import { pickKey, pieceDescription } from "@/lib/pieces";
+import { pieceDescription } from "@/lib/pieces";
 
 type Stage = "upload" | "camera" | "review" | "loading" | "done" | "error";
 
@@ -31,11 +31,9 @@ export function TryOnModal({
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const saveLook = useAppStore((s) => s.saveLook);
-  const picks = useAppStore((s) => s.picks);
   const prefs = useAppStore((s) => s.tryOnPrefs);
   const setTryOnPrefs = useAppStore((s) => s.setTryOnPrefs);
   const profileGender = useAppStore((s) => s.profile.gender);
-  const pickedCount = outfit.items.filter((it) => picks[pickKey(outfit.id, it.product.id)]).length;
 
   const idx = outfits.findIndex((o) => o.id === outfit.id);
   const hasPrev = idx > 0;
@@ -125,7 +123,6 @@ export function TryOnModal({
           photoDataUrl: photoData,
           pieces: targetOutfit.items.map((it) => ({
             description: pieceDescription(it.product),
-            imageDataUrl: picks[pickKey(targetOutfit.id, it.product.id)]?.imageDataUrl,
           })),
         }),
       });
@@ -178,11 +175,7 @@ export function TryOnModal({
             Upload or take a photo — we&apos;ll generate this outfit on you.
           </p>
           <p className="text-xs text-gray mt-2 max-w-sm mx-auto">
-            {pickedCount === outfit.items.length
-              ? "Using your picks for every piece."
-              : pickedCount > 0
-                ? `Using your picks for ${pickedCount} of ${outfit.items.length} pieces — the rest are generated from the style description.`
-                : "No pieces added yet — close this and tap “Add yours” on a piece to paste a product link for a true-to-product result. Otherwise we'll generate from the style description."}
+            A full-length photo gives the most accurate result. The look uses the exact colors and cuts of the pieces below.
           </p>
 
           <div className="mt-8">
@@ -315,7 +308,7 @@ export function TryOnModal({
 
                 <div className="flex justify-center gap-2">
                   {outfit.items.map((it) => (
-                    <PieceThumb key={it.product.id} product={it.product} pick={picks[pickKey(outfit.id, it.product.id)]} className="w-12 h-12 rounded-lg" compact />
+                    <PieceThumb key={it.product.id} product={it.product} className="w-12 h-12 rounded-lg" compact />
                   ))}
                 </div>
 

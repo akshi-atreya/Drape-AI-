@@ -43,9 +43,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Each garment photo is re-encoded client-side to ≤640px; this is just a guard.
-  if (body.pieces.some((p) => typeof p.description !== "string" || (p.imageDataUrl && p.imageDataUrl.length > 2_000_000))) {
-    return NextResponse.json({ error: "One of the garment photos is too large or invalid." }, { status: 413 });
+  if (body.pieces.some((p) => typeof p.description !== "string" || p.description.length > 300)) {
+    return NextResponse.json({ error: "Invalid outfit pieces." }, { status: 400 });
   }
 
   // Subject hints are free-form from the client, so allow-list them before they reach the prompt.
@@ -57,7 +56,7 @@ export async function POST(req: NextRequest) {
 
   const result = await generateTryOnImage(
     body.photoDataUrl,
-    body.pieces.map((p) => ({ description: p.description.slice(0, 200), imageDataUrl: p.imageDataUrl })),
+    body.pieces.map((p) => ({ description: p.description.slice(0, 200) })),
     subject
   );
   if (result.error) {

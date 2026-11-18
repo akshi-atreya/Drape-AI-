@@ -7,7 +7,6 @@ import {
   ChatMessage,
   emptyStyleProfile,
   emptyTryOnPrefs,
-  GarmentPick,
   Outfit,
   SavedLook,
   StyleProfile,
@@ -15,7 +14,6 @@ import {
   WardrobeItem,
 } from "@/lib/types";
 import { CountryCode, detectCountryFromLocale } from "@/lib/locale";
-import { pickKey } from "@/lib/pieces";
 import { bandFromTemp, MANUAL_WEATHER_OPTIONS, seasonFromTemp, WeatherContext } from "@/lib/weather";
 
 interface ChatApiOutfitResult {
@@ -40,8 +38,6 @@ interface AppState {
   locationStatus: "unknown" | "granted" | "denied" | "unavailable";
   /** The generated hero image for each outfit on screen, keyed by outfit id. */
   outfitImages: Record<string, string>;
-  /** The shopper's own garments for pieces in the outfits on screen, keyed by pickKey(outfitId, productId). */
-  picks: Record<string, GarmentPick>;
   /** Optional try-on hints (gender / build / height). Kept in the browser only. */
   tryOnPrefs: TryOnPrefs;
   loading: boolean;
@@ -51,12 +47,11 @@ interface AppState {
   sendMessage: (text: string, targetOutfitId?: string) => Promise<void>;
   remix: (outfitId: string, instruction: string) => Promise<void>;
   updateProfile: (patch: Partial<StyleProfile>) => void;
-  reviveOutfit: (outfit: Outfit, picks?: Record<string, GarmentPick>, image?: string) => void;
+  reviveOutfit: (outfit: Outfit, image?: string) => void;
   detectCountry: () => void;
   setCountryCode: (country: CountryCode) => void;
   setTryOnPrefs: (patch: Partial<TryOnPrefs>) => void;
   ensureWeather: (force?: boolean) => Promise<void>;
-  setPick: (outfitId: string, productId: string, pick: GarmentPick | null) => void;
   setOutfitImage: (outfitId: string, image: string) => void;
   addWardrobeItem: (item: Omit<WardrobeItem, "id" | "addedAt">) => void;
   removeWardrobeItem: (id: string) => void;
@@ -104,7 +99,6 @@ export const useAppStore = create<AppState>()(
       savedLooks: [],
       countryCode: "US",
       countryCodeManuallySet: false,
-      picks: {},
       outfitImages: {},
       weather: null,
       locationStatus: "unknown",
@@ -168,19 +162,10 @@ export const useAppStore = create<AppState>()(
           );
 
           const nextOutfitsById = { ...get().outfitsById };
-          const nextPicks = { ...get().picks };
           const newIds: string[] = [];
-          for (const { outfit, replacesId } of outfits) {
+          for (const { outfit } of outfits) {
             nextOutfitsById[outfit.id] = outfit;
             newIds.push(outfit.id);
-            // A remix keeps the shopper's chosen garments for every piece that
-            // survived; pieces the remix swapped out lose theirs.
-            if (replacesId) {
-              for (const it of outfit.items) {
-                const old = nextPicks[pickKey(replacesId, it.product.id)];
-                if (old) nextPicks[pickKey(outfit.id, it.product.id)] = old;
-              }
-            }
           }
 
           // Merge into display order: a fresh find_outfits call replaces the
@@ -212,7 +197,6 @@ export const useAppStore = create<AppState>()(
             messages: [...get().messages, assistantMsg],
             profile: newProfile,
             outfitsById: nextOutfitsById,
-            picks: nextPicks,
             outfitOrder: newIds.length ? nextOrder : get().outfitOrder,
             loading: false,
           }));
@@ -281,25 +265,10 @@ export const useAppStore = create<AppState>()(
 
       setOutfitImage: (outfitId, image) => set((s) => ({ outfitImages: { ...s.outfitImages, [outfitId]: image } })),
 
-      setPick: (outfitId, productId, pick) =>
-        set((s) => {
-          const key = pickKey(outfitId, productId);
-          const next = { ...s.picks };
-          if (pick) next[key] = pick;
-          else delete next[key];
-          return { picks: next };
-        }),
-
-      reviveOutfit: (outfit, picks, image) =>
+      reviveOutfit: (outfit, image) =>
         set((s) => ({
           chatStarted: true,
           outfitImages: image ? { ...s.outfitImages, [outfit.id]: image } : s.outfitImages,
-          picks: {
-            ...s.picks,
-            ...Object.fromEntries(
-              Object.entries(picks ?? {}).map(([productId, pick]) => [pickKey(outfit.id, productId), pick])
-            ),
-          },
           outfitsById: { ...s.outfitsById, [outfit.id]: outfit },
           outfitOrder: s.outfitOrder.includes(outfit.id) ? s.outfitOrder : [...s.outfitOrder, outfit.id],
           messages: [
@@ -326,30 +295,23 @@ export const useAppStore = create<AppState>()(
         set((s) => ({ wardrobe: s.wardrobe.filter((w) => w.id !== id) })),
 
       saveLook: (look) =>
-        set((s) => {
-          let picks = look.picks;
-          if (!picks && look.type === "outfit" && look.outfit) {
-            const outfit = look.outfit;
-            const collected: Record<string, GarmentPick> = {};
-            for (const it of outfit.items) {
-              const pick = s.picks[pickKey(outfit.id, it.product.id)];
-              if (pick) collected[it.product.id] = pick;
-            }
-            if (Object.keys(collected).length) picks = collected;
-          }
-          return {
-            savedLooks: [
-              { ...look, picks, image: look.image ?? (look.type === "outfit" && look.outfit ? s.outfitImages[look.outfit.id] : undefined), id: uuid(), savedAt: new Date().toISOString() },
-              ...s.savedLooks,
-            ],
-          };
-        }),
+        set((s) => ({
+          savedLooks: [
+            {
+              ...look,
+              image: look.image ?? (look.type === "outfit" && look.outfit ? s.outfitImages[look.outfit.id] : undefined),
+              id: uuid(),
+              savedAt: new Date().toISOString(),
+            },
+            ...s.savedLooks,
+          ],
+        })),
 
       removeSavedLook: (id) =>
         set((s) => ({ savedLooks: s.savedLooks.filter((l) => l.id !== id) })),
 
       resetChat: () =>
-        set({ chatStarted: false, messages: [], outfitOrder: [], outfitsById: {}, picks: {}, outfitImages: {} }),
+        set({ chatStarted: false, messages: [], outfitOrder: [], outfitsById: {}, outfitImages: {} }),
     }),
     {
       name: "ai-fashion-shopper-store",

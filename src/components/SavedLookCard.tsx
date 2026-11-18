@@ -29,7 +29,7 @@ export function SavedLookCard({ look }: { look: SavedLook }) {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => {
-                reviveOutfit(outfit, look.picks, look.image);
+                reviveOutfit(outfit, look.image);
                 sendMessage(`Let's revisit my saved "${outfit.name}" look — what would you change?`, outfit.id);
                 router.push("/");
               }}

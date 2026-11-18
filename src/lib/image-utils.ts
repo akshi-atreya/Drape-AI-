@@ -1,7 +1,7 @@
 /**
  * Re-encodes any image (data URL or object URL) into a small, guaranteed-
- * valid JPEG. Keeps garment photos light enough to store with saved looks
- * and to send alongside a try-on request.
+ * valid JPEG. Keeps photos light enough to store with saved looks
+ * and to send with a try-on request.
  */
 export function resizeToJpegDataUrl(src: string, maxDimension = 640, quality = 0.85): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -85,7 +85,7 @@ export function checkImageFile(file: File): UploadProblem | null {
     return { title: "HEIC photos aren't supported", fileInfo, reason: "This is a HEIC/HEIF image — the default format on iPhones. Most browsers (including Chrome) can't open that format.", fix: "On iPhone: Settings → Camera → Formats → Most Compatible. Or export the photo as JPEG. On a Mac: open it in Preview → File → Export → JPEG." };
   }
   if (fmt === "pdf") {
-    return { title: "That's a PDF, not an image", fileInfo, reason: "PDFs can't be used as a photo or garment image.", fix: "Take a screenshot of the item or page, or export it as a JPG or PNG." };
+    return { title: "That's a PDF, not an image", fileInfo, reason: "PDFs can't be used as a photo.", fix: "Take a screenshot of the item or page, or export it as a JPG or PNG." };
   }
   if (file.type.startsWith("video/") || ["mp4", "mov", "webm", "avi", "mkv"].includes(fmt)) {
     return { title: "That's a video, not an image", fileInfo, reason: "Only still images can be used here.", fix: "Pick a still photo, or screenshot a frame from the video." };

@@ -1,9 +1,9 @@
 # FitCast AI — your AI fashion suggestion friend
 
-Chat with an AI stylist about an occasion. FitCast AI designs complete looks made
-of piece *types* ("a charcoal blouse, cropped cut"), shows one illustrative
-image of the look, and you pick the real items from any store — paste a product
-link or upload a photo — then see the whole outfit on you with virtual try-on.
+Chat with an AI stylist about an occasion. FitCast AI designs complete looks
+made of piece *types* ("a charcoal blouse, cropped cut") that fit the weather
+where you are and what's trending right now, shows one illustrative image of
+the look, and then shows the whole outfit on you with virtual try-on.
 
 ## How it works
 
@@ -21,11 +21,13 @@ link or upload a photo — then see the whole outfit on you with virtual try-on.
   used to boost matching pieces. Cached 12h; a daily Vercel Cron
   (`/api/cron/trends`, protected by `CRON_SECRET`) keeps it warm. Only headline,
   publisher snippet and link are used — never article text.
-- **Add your own item** (`/api/garment`): reads the product photo from a pasted
-  link (with SSRF protection); upload is the fallback for stores that block it.
+- **Weather** (`/api/weather`): the browser shares location (never stored) →
+  Open-Meteo forecast → temperature drives which pieces make sense (each piece
+  type has a comfort range; coats are required in the cold). If location is
+  declined, the stylist asks with tappable options instead.
 - **Look image** (`/api/outfit-image`) and **virtual try-on** (`/api/tryon`):
-  Gemini image model. Try-on uses the shopper's own garment photos plus optional
-  gender / build / height hints.
+  Gemini image model. Try-on dresses the shopper's photo in the outfit's pieces
+  (exact colors and cuts), with optional gender / build / height hints.
 - **Auth**: Auth.js credentials + JWT, users in Postgres (Neon via Vercel).
 
 ## Setup
