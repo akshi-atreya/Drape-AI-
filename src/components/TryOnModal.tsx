@@ -2,8 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Outfit } from "@/lib/types";
-import { ProductSwatch } from "@/components/ProductSwatch";
+import { PieceThumb } from "@/components/PieceThumb";
+import { TryOnTuner } from "@/components/TryOnTuner";
+import { UploadErrorDialog } from "@/components/UploadErrorDialog";
+import { describeCameraError, loadImageFile, UploadProblem, UploadProblemError } from "@/lib/image-utils";
 import { useAppStore } from "@/store/useAppStore";
+import { pickKey, pieceDescription } from "@/lib/pieces";
 
 type Stage = "upload" | "camera" | "review" | "loading" | "done" | "error";
 
@@ -22,10 +26,16 @@ export function TryOnModal({
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>("upload");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [problem, setProblem] = useState<UploadProblem | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const saveLook = useAppStore((s) => s.saveLook);
+  const picks = useAppStore((s) => s.picks);
+  const prefs = useAppStore((s) => s.tryOnPrefs);
+  const setTryOnPrefs = useAppStore((s) => s.setTryOnPrefs);
+  const profileGender = useAppStore((s) => s.profile.gender);
+  const pickedCount = outfit.items.filter((it) => picks[pickKey(outfit.id, it.product.id)]).length;
 
   const idx = outfits.findIndex((o) => o.id === outfit.id);
   const hasPrev = idx > 0;
@@ -38,8 +48,16 @@ export function TryOnModal({
 
   useEffect(() => () => stopCamera(), []);
 
+  // Prefill who we're styling from what the shopper told the stylist in chat.
+  useEffect(() => {
+    if (!useAppStore.getState().tryOnPrefs.gender && (profileGender === "Women" || profileGender === "Men")) {
+      setTryOnPrefs({ gender: profileGender });
+    }
+  }, [profileGender, setTryOnPrefs]);
+
   const startCamera = async () => {
     setErrorMessage(null);
+    setProblem(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user" },
@@ -50,8 +68,8 @@ export function TryOnModal({
       requestAnimationFrame(() => {
         if (videoRef.current) videoRef.current.srcObject = stream;
       });
-    } catch {
-      setErrorMessage("Couldn't access your camera. Check your browser's camera permission, or upload a photo instead.");
+    } catch (err) {
+      setProblem(describeCameraError(err));
     }
   };
 
@@ -71,41 +89,24 @@ export function TryOnModal({
 
   // Always re-encode through a canvas into a small, guaranteed-valid JPEG —
   // never send the raw file bytes on. A phone-camera PNG can be 5-10x the
-  // size of the same photo as JPEG (PNG is lossless/uncompressed), which
-  // was producing multi-MB request bodies that got truncated in transit
-  // (surfacing as "Invalid JSON body") and, since the raw untouched bytes
-  // were also what got rendered as the preview <img>, could show as a
-  // broken/corrupt preview for the same oversized or unusual files.
+  // size of the same photo as JPEG, which produced multi-MB request bodies
+  // that got truncated in transit. loadImageFile also explains, specifically,
+  // why a file can't be used (HEIC, PDF, damaged, too large, ...).
   const MAX_DIMENSION = 1280;
 
-  const handleFile = (file: File) => {
+  const handleFile = async (file: File) => {
     setErrorMessage(null);
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const scale = Math.min(1, MAX_DIMENSION / Math.max(img.width, img.height));
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.max(1, Math.round(img.width * scale));
-        canvas.height = Math.max(1, Math.round(img.height * scale));
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          setErrorMessage("Couldn't process that photo. Please try a different one.");
-          return;
-        }
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        setPhoto(canvas.toDataURL("image/jpeg", 0.88));
-        setStage("review");
-      };
-      img.onerror = () => {
-        setErrorMessage("That file doesn't look like a valid image. Please try a different photo.");
-      };
-      img.src = reader.result as string;
-    };
-    reader.onerror = () => {
-      setErrorMessage("Couldn't read that file. Please try a different photo.");
-    };
-    reader.readAsDataURL(file);
+    setProblem(null);
+    try {
+      setPhoto(await loadImageFile(file, MAX_DIMENSION, 0.88));
+      setStage("review");
+    } catch (err) {
+      setProblem(
+        err instanceof UploadProblemError
+          ? err.problem
+          : { title: "Couldn't use that photo", reason: "Something unexpected went wrong while reading it.", fix: "Try a different photo." }
+      );
+    }
   };
 
   const generateFor = async (photoData: string, targetOutfit: Outfit) => {
@@ -115,7 +116,18 @@ export function TryOnModal({
       const res = await fetch("/api/tryon", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ photoDataUrl: photoData, items: targetOutfit.items }),
+        body: JSON.stringify({
+          subject: {
+            gender: prefs.gender ?? undefined,
+            build: prefs.build ?? undefined,
+            height: prefs.height.trim() || undefined,
+          },
+          photoDataUrl: photoData,
+          pieces: targetOutfit.items.map((it) => ({
+            description: pieceDescription(it.product),
+            imageDataUrl: picks[pickKey(targetOutfit.id, it.product.id)]?.imageDataUrl,
+          })),
+        }),
       });
       const data = await res.json();
       if (!res.ok || !data.imageDataUrl) {
@@ -147,8 +159,8 @@ export function TryOnModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-charcoal/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="animate-in bg-ivory w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl relative">
+    <div className="fixed inset-0 z-50 bg-charcoal/60 backdrop-blur-sm flex items-center justify-center md:p-4">
+      <div className="animate-in bg-ivory w-full max-w-3xl h-[100dvh] md:h-auto max-h-[100dvh] md:max-h-[90vh] overflow-y-auto rounded-none md:rounded-2xl relative pt-[env(safe-area-inset-top)]">
         <button
           onClick={() => {
             stopCamera();
@@ -164,6 +176,13 @@ export function TryOnModal({
           <h2 className="font-serif text-3xl md:text-4xl">See it on you.</h2>
           <p className="text-charcoal-soft mt-2 text-sm md:text-base">
             Upload or take a photo — we&apos;ll generate this outfit on you.
+          </p>
+          <p className="text-xs text-gray mt-2 max-w-sm mx-auto">
+            {pickedCount === outfit.items.length
+              ? "Using your picks for every piece."
+              : pickedCount > 0
+                ? `Using your picks for ${pickedCount} of ${outfit.items.length} pieces — the rest are generated from the style description.`
+                : "No pieces added yet — close this and tap “Add yours” on a piece to paste a product link for a true-to-product result. Otherwise we'll generate from the style description."}
           </p>
 
           <div className="mt-8">
@@ -188,7 +207,6 @@ export function TryOnModal({
                   <CameraIcon />
                   Take a photo
                 </button>
-                {errorMessage && <p className="text-xs text-accent max-w-sm">{errorMessage}</p>}
               </div>
             )}
 
@@ -200,6 +218,7 @@ export function TryOnModal({
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) handleFile(f);
+                e.target.value = "";
               }}
             />
 
@@ -234,8 +253,9 @@ export function TryOnModal({
                 <img
                   src={photo}
                   alt="Your photo"
-                  className="mx-auto w-full max-w-sm h-[420px] rounded-2xl object-cover"
+                  className="mx-auto w-full max-w-sm h-[300px] md:h-[360px] rounded-2xl object-cover"
                 />
+                <TryOnTuner prefs={prefs} onChange={setTryOnPrefs} />
                 <div className="flex justify-center gap-2">
                   <button onClick={reset} className="px-4 py-2 rounded-full border border-beige-dark text-sm">
                     Retake
@@ -295,7 +315,7 @@ export function TryOnModal({
 
                 <div className="flex justify-center gap-2">
                   {outfit.items.map((it) => (
-                    <ProductSwatch key={it.product.id} product={it.product} className="w-12 h-12 rounded-lg" compact />
+                    <PieceThumb key={it.product.id} product={it.product} pick={picks[pickKey(outfit.id, it.product.id)]} className="w-12 h-12 rounded-lg" compact />
                   ))}
                 </div>
 
@@ -332,6 +352,17 @@ export function TryOnModal({
           </div>
         </div>
       </div>
+      {problem && (
+        <UploadErrorDialog
+          problem={problem}
+          onClose={() => setProblem(null)}
+          onRetry={() => {
+            setProblem(null);
+            fileRef.current?.click();
+          }}
+          retryLabel="Choose another photo"
+        />
+      )}
     </div>
   );
 }

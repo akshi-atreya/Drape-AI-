@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import { useAppStore } from "@/store/useAppStore";
+import { AUTH_DISABLED } from "@/lib/auth-mode";
 
 const LINKS = [
   { href: "/", label: "Discover" },
@@ -16,16 +17,14 @@ const LINKS = [
 export function Nav() {
   const pathname = usePathname();
   const detectCountry = useAppStore((s) => s.detectCountry);
-  const fetchFxRates = useAppStore((s) => s.fetchFxRates);
   const { data: session, status } = useSession();
 
   useEffect(() => {
-    // Region detection only affects which storefront "Shop" links resolve
-    // to — safe to run once, no permission prompt (reads navigator.language,
-    // not geolocation).
+    // Region detection only affects which country the "Find it" searches
+    // are scoped to — safe to run once, no permission prompt (reads
+    // navigator.language, not geolocation).
     detectCountry();
-    fetchFxRates();
-  }, [detectCountry, fetchFxRates]);
+  }, [detectCountry]);
 
   return (
     <header className="sticky top-0 z-30 bg-ivory/90 backdrop-blur-sm border-b border-beige-dark/50">
@@ -46,7 +45,9 @@ export function Nav() {
             </Link>
           ))}
         </div>
-        {status === "authenticated" ? (
+        {AUTH_DISABLED ? (
+          <span className="text-xs text-gray">Testing mode</span>
+        ) : status === "authenticated" ? (
           <div className="flex items-center gap-3">
             <span className="hidden sm:inline text-sm text-gray truncate max-w-[160px]">
               {session.user?.name || session.user?.email}

@@ -22,10 +22,13 @@ export function ChatMessageBubble({
   message,
   onTryOn,
   savedIds,
+  onQuickReply,
 }: {
   message: ChatMessage;
   onTryOn: (outfit: Outfit) => void;
   savedIds: Set<string>;
+  /** Set only while these buttons can still be used (latest message, nothing in flight). */
+  onQuickReply?: (text: string) => void;
 }) {
   const isUser = message.role === "user";
 
@@ -43,10 +46,29 @@ export function ChatMessageBubble({
         )}
       </div>
 
+      {onQuickReply && message.quickReplies && message.quickReplies.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Quick replies">
+          {message.quickReplies.map((reply) => (
+            <button
+              key={reply}
+              onClick={() => onQuickReply(reply)}
+              className="px-4 py-2 rounded-full border border-charcoal/70 bg-white text-sm text-charcoal hover:bg-charcoal hover:text-ivory transition-colors"
+            >
+              {reply}
+            </button>
+          ))}
+        </div>
+      )}
+
       {message.outfits && message.outfits.length > 0 && (
-        <div className="mt-4 flex flex-col md:flex-row flex-wrap gap-5 w-full">
+        // Phone: a swipeable, snap-scrolling carousel that bleeds to the screen
+        // edges (the next card peeks in to hint at swiping). Desktop: the
+        // original wrapping grid of cards.
+        <div className="mt-4 flex gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar w-[calc(100%+3rem)] -mx-6 px-6 pb-2 md:w-full md:mx-0 md:px-0 md:pb-0 md:flex-wrap md:overflow-visible md:gap-5">
           {message.outfits.map((outfit) => (
-            <OutfitCard key={outfit.id} outfit={outfit} onTryOn={onTryOn} savedIds={savedIds} />
+            <div key={outfit.id} className="shrink-0 snap-center w-[86%] md:w-full md:max-w-[560px]">
+              <OutfitCard outfit={outfit} onTryOn={onTryOn} savedIds={savedIds} />
+            </div>
           ))}
         </div>
       )}

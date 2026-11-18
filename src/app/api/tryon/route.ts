@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateTryOnImage } from "@/lib/tryon-provider";
-import { OutfitItem } from "@/lib/types";
+import { generateTryOnImage, TryOnPiece, TryOnSubject } from "@/lib/tryon-provider";
+import { BODY_BUILDS } from "@/lib/types";
 
 export const runtime = "nodejs";
+// Model calls can take a while; Vercel's default function timeout is shorter.
+export const maxDuration = 60;
 
 interface TryOnRequestBody {
   photoDataUrl: string;
-  items: OutfitItem[];
+  pieces: TryOnPiece[];
+  subject?: { gender?: string; build?: string; height?: string };
 }
 
 /**
@@ -27,8 +30,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (!body?.photoDataUrl || !Array.isArray(body.items)) {
-    return NextResponse.json({ error: "photoDataUrl and items are required" }, { status: 400 });
+  if (!body?.photoDataUrl || !Array.isArray(body.pieces) || body.pieces.length === 0 || body.pieces.length > 8) {
+    return NextResponse.json({ error: "photoDataUrl and pieces are required" }, { status: 400 });
   }
 
   // Defensive cap even though the client compresses uploads before sending —
@@ -40,7 +43,23 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const result = await generateTryOnImage(body.photoDataUrl, body.items);
+  // Each garment photo is re-encoded client-side to ≤640px; this is just a guard.
+  if (body.pieces.some((p) => typeof p.description !== "string" || (p.imageDataUrl && p.imageDataUrl.length > 2_000_000))) {
+    return NextResponse.json({ error: "One of the garment photos is too large or invalid." }, { status: 413 });
+  }
+
+  // Subject hints are free-form from the client, so allow-list them before they reach the prompt.
+  const subject: TryOnSubject = {};
+  if (body.subject?.gender === "Women" || body.subject?.gender === "Men") subject.gender = body.subject.gender;
+  if (BODY_BUILDS.includes(body.subject?.build as never)) subject.build = body.subject!.build;
+  const height = typeof body.subject?.height === "string" ? body.subject.height.trim() : "";
+  if (/^[0-9a-zA-Z'"’.\s-]{1,20}$/.test(height)) subject.height = height;
+
+  const result = await generateTryOnImage(
+    body.photoDataUrl,
+    body.pieces.map((p) => ({ description: p.description.slice(0, 200), imageDataUrl: p.imageDataUrl })),
+    subject
+  );
   if (result.error) {
     return NextResponse.json({ error: result.error }, { status: 502 });
   }

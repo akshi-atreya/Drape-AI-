@@ -9,20 +9,22 @@ import {
   STYLE_TAGS,
   StyleProfile,
   StyleTag,
+  Trend,
 } from "@/lib/types";
 import {
   generateOutfits,
+  matchedTrendNames,
   parseRemixInstruction,
   remixOutfit,
 } from "@/lib/recommendation-engine";
 import { profileToOutfitRequest, mergeProfile } from "@/lib/style-profile";
 import { catalog } from "@/lib/catalog";
-import { CountryCode, retailersAvailableIn } from "@/lib/locale";
+import { CountryCode } from "@/lib/locale";
 
 /**
  * Tool surface exposed to the LLM. The model handles conversation, intent
  * extraction, and phrasing; every tool here delegates the actual product
- * selection/ranking/budget math to the deterministic recommendation engine.
+ * selection/ranking math to the deterministic recommendation engine.
  */
 export const toolDefinitions: Anthropic.Tool[] = [
   {
@@ -37,8 +39,6 @@ export const toolDefinitions: Anthropic.Tool[] = [
         trendLevel: { type: "number", minimum: 0, maximum: 1, description: "0 = classic, 1 = trendsetter" },
         colorsLike: { type: "array", items: { type: "string" } },
         colorsAvoid: { type: "array", items: { type: "string" } },
-        brandsLike: { type: "array", items: { type: "string" } },
-        brandsAvoid: { type: "array", items: { type: "string" } },
         fitPreferences: { type: "array", items: { type: "string" } },
         favoriteCategories: { type: "array", items: { type: "string", enum: CATEGORIES } },
         avoidedCategories: { type: "array", items: { type: "string", enum: CATEGORIES } },
@@ -49,15 +49,14 @@ export const toolDefinitions: Anthropic.Tool[] = [
   {
     name: "find_outfits",
     description:
-      "Search the product catalog and construct complete, budget-aware outfits (not isolated items) for the user's current request. Requires knowing who you're shopping for (gender) — ask that first if it hasn't come up yet, don't guess. Only call this once you know enough to make a good outfit (gender + typically budget + occasion or explicit request).",
+      "Design complete outfits (not isolated items) for the user's current request, made of garment TYPES — e.g. 'charcoal satin blouse', 'wide-leg trousers' — not specific store products. The shopper will find the real pieces themselves on any store and paste the links. Requires knowing who you're shopping for (gender) — ask that first if it hasn't come up yet, don't guess. Only call this once you know enough to make a good outfit (gender + occasion or explicit request).",
     input_schema: {
       type: "object",
       properties: {
         gender: { type: "string", enum: GENDERS, description: "Who you're shopping for. Required unless already known from the profile." },
-        budget: { type: ["number", "null"], description: "Total budget for the whole outfit, if known. Always in USD — convert from the shopper's local currency first if they stated one (see the currency context in your system prompt)." },
         occasion: { type: ["string", "null"] },
         locationHint: { type: ["string", "null"], description: "City/trip mentioned by the user, e.g. 'NYC', 'Paris'." },
-        season: { type: ["string", "null"], enum: [...SEASON_TAGS, null] },
+        season: { type: ["string", "null"], enum: [...SEASON_TAGS, null], description: "The season the outfit will be worn in. ALWAYS set this when the user states or implies one — a season ('winter'), a month or date, or a trip destination and time ('Europe in December' → Winter, 'Paris in October' → Fall, 'Bali in July' → Summer). Think about the destination's hemisphere and climate, not the user's current season. Only leave null if there is truly no clue." },
         count: { type: "integer", minimum: 1, maximum: 4, default: 3 },
         styleTagsOverride: { type: "array", items: { type: "string", enum: STYLE_TAGS } },
         trendLevelOverride: { type: "number", minimum: 0, maximum: 1 },
@@ -68,7 +67,7 @@ export const toolDefinitions: Anthropic.Tool[] = [
   {
     name: "remix_outfit",
     description:
-      "Modify one existing outfit conversationally (e.g. 'replace the jacket', 'make it more casual', 'keep the shoes but make everything else cheaper'). Preserves pieces that should stay and changes only what the instruction implies. outfitId must be one of the ids from the outfits currently shown to the user.",
+      "Modify one existing outfit conversationally (e.g. 'replace the jacket', 'make it more casual', 'make it warmer', 'use more color'). Preserves pieces that should stay and changes only what the instruction implies. outfitId must be one of the ids from the outfits currently shown to the user.",
     input_schema: {
       type: "object",
       properties: {
@@ -81,11 +80,18 @@ export const toolDefinitions: Anthropic.Tool[] = [
   {
     name: "respond_to_user",
     description:
-      "Send your conversational reply. ALWAYS call this last, exactly once, to end your turn. If you called find_outfits or remix_outfit this turn, include a short, specific 'why it works' explanation for each affected outfitId (referencing actual colors/materials/trend tags where relevant).",
+      "Send your conversational reply. ALWAYS call this last, exactly once, to end your turn. If you called find_outfits or remix_outfit this turn, include a short, specific 'why it works' explanation for each affected outfitId (referencing the actual colors, cuts and currentTrends from the tool result — never invent fabrics or materials).",
     input_schema: {
       type: "object",
       properties: {
         message: { type: "string" },
+        quickReplies: {
+          type: "array",
+          items: { type: "string" },
+          maxItems: 5,
+          description:
+            "Optional tap-to-reply buttons for a question you are asking in this message, so the user doesn't have to type. 2-5 short options (1-3 words each) that are direct answers to your question. When you ask who you're shopping for, ALWAYS pass exactly: [\"Womenswear\", \"Menswear\", \"No preference\"]. Omit when you are not asking a question, or when the answer is open-ended.",
+        },
         outfitExplanations: {
           type: "array",
           items: {
@@ -116,8 +122,10 @@ export interface ToolRunContext {
   replaces: Map<string, string>;
   /** ids produced by find_outfits this turn — a brand new board, not a patch. */
   freshSetIds: Set<string>;
-  /** Shopper's region — restricts recommendations to retailers that actually operate there. */
+  /** Shopper's region (used for locale-aware search links in the UI; recommendations are region-independent). */
   countryCode: CountryCode;
+  /** Current trends from fashion publications (null when the live pipeline is unavailable). */
+  liveTrends: Trend[] | null;
 }
 
 export function executeTool(
@@ -144,14 +152,13 @@ export function executeTool(
 
     const req = profileToOutfitRequest(ctx.profile, {
       gender,
-      budget: (input.budget as number | null) ?? null,
-      occasion: (input.occasion as string | null) ?? null,
+            occasion: (input.occasion as string | null) ?? null,
       locationHint: (input.locationHint as string | null) ?? null,
       season: (input.season as string | null) ?? null,
       count: (input.count as number) ?? 3,
+      liveTrends: ctx.liveTrends,
       styleTags: (input.styleTagsOverride as StyleTag[] | undefined) ?? undefined,
       trendLevel: (input.trendLevelOverride as number | undefined) ?? undefined,
-      availableRetailers: retailersAvailableIn(ctx.countryCode),
     });
     const outfits = generateOutfits(catalog, req);
     outfits.forEach((o) => {
@@ -164,17 +171,13 @@ export function executeTool(
         id: o.id,
         name: o.name,
         occasion: o.occasion,
-        totalPrice: o.totalPrice,
-        budget: o.budget,
         items: o.items.map((it) => ({
           role: it.role,
-          name: it.product.name,
-          brand: it.product.brand,
-          retailer: it.product.retailer,
-          price: it.product.salePrice ?? it.product.price,
+          piece: it.product.name,
+          fit: it.product.fit,
           color: it.product.primaryColor,
-          material: it.product.material,
-          trendTags: it.product.trendTags,
+          // Current trends this piece expresses (from fashion publications); cite these by name.
+          currentTrends: ctx.liveTrends ? matchedTrendNames(it.product, ctx.liveTrends) : it.product.trendTags,
         })),
       })),
     };
@@ -188,9 +191,8 @@ export function executeTool(
     }
     const instruction = parseRemixInstruction((input.instruction as string) ?? "");
     const req = profileToOutfitRequest(ctx.profile, {
-      budget: base.budget,
       occasion: base.occasion,
-      availableRetailers: retailersAvailableIn(ctx.countryCode),
+      liveTrends: ctx.liveTrends,
     });
     const updated = remixOutfit(catalog, base, instruction, req);
     ctx.outfitsById.delete(outfitId);
@@ -201,13 +203,10 @@ export function executeTool(
       outfit: {
         id: updated.id,
         name: updated.name,
-        totalPrice: updated.totalPrice,
-        budget: updated.budget,
         items: updated.items.map((it) => ({
           role: it.role,
-          name: it.product.name,
-          brand: it.product.brand,
-          price: it.product.salePrice ?? it.product.price,
+          piece: it.product.name,
+          fit: it.product.fit,
           color: it.product.primaryColor,
         })),
       },
@@ -217,17 +216,20 @@ export function executeTool(
   return { error: `Unknown tool ${name}` };
 }
 
-export const SYSTEM_PROMPT = `You are the AI personal stylist for a premium fashion discovery app. You talk like a knowledgeable, warm, concise human stylist — never like a form or a search engine.
+export const SYSTEM_PROMPT = `You are the AI personal stylist for Drape, a premium fashion app. You talk like a knowledgeable, warm, concise human stylist — never like a form or a search engine.
+
+How Drape works: you design the look and recommend piece TYPES (e.g. "a charcoal satin blouse, cropped cut"), not specific store products. The shopper finds the real pieces on whichever store they like, pastes each product link (or uploads a photo) onto the matching piece in the outfit card, and then Drape's virtual try-on shows the whole look on them. You never name prices, brands or retailers, and you never claim a piece is available anywhere — you don't have store data.
 
 Core rules:
-- Ask only the questions that matter, one or two at a time, never a long questionnaire. If the user already gave enough info (e.g. budget + occasion), don't ask more — go straight to find_outfits.
-- You must know who you're shopping for (women's, men's, or no preference) before calling find_outfits. If it isn't already known (check the profile / conversation) and the user's message doesn't make it obvious, ask a single natural question for it first — e.g. "Who are we shopping for — you, or a gift for someone?" or "Are you after menswear or womenswear for this?" — before anything else, even before budget. Once you learn it, call update_style_profile with it. Never guess or default this silently.
+- Ask only the questions that matter, one or two at a time, never a long questionnaire. If the user already gave enough info (e.g. an occasion), don't ask more — go straight to find_outfits.
+- You must know who you're shopping for (women's, men's, or no preference) before calling find_outfits. If it isn't already known (check the profile / conversation) and the user's message doesn't make it obvious, ask a single natural question for it first — e.g. "Are you after menswear or womenswear for this?" Once you learn it, call update_style_profile with it. Never guess or default this silently.
+- Whenever you ask a question that has a few natural answers (menswear/womenswear, the vibe or climate of a trip, how formal, how bold), pass them as quickReplies in respond_to_user so the user can tap instead of type. Ask one question at a time when you can.
 - Build complete outfits, never isolated single-item recommendations, unless the user explicitly asks for one item.
-- Respect budget strictly. The recommendation engine handles the math; you never need to compute prices yourself.
-- When the user states a lasting preference (style, disliked colors/brands, fit), call update_style_profile.
-- When ready to present outfits, call find_outfits.
-- When the user wants to adjust an existing outfit (swap a piece, make it more casual/feminine/warmer, change budget, try a specific brand, keep certain pieces), call remix_outfit with the outfitId from the outfits currently on screen and the instruction close to verbatim. Never regenerate from scratch for a remix request.
-- Always end your turn with exactly one call to respond_to_user. Keep the message itself short (1-3 sentences) — per-outfit reasoning goes in outfitExplanations, referencing real colors/materials/trends from the tool results, e.g. "The warm neutral palette keeps the look minimal while the suede jacket introduces a current fall texture trend."
+- If the user mentions a budget, acknowledge it kindly and say that they'll set the final price themselves when they pick pieces — suggest styling choices (e.g. where a simple piece works as well as a statement one), but don't promise prices.
+- When the user states a lasting preference (style, disliked colors, fit), call update_style_profile.
+- When ready to present outfits, call find_outfits, and always pass the season if the user gave any seasonal clue (see the tool description) — don't leave a winter trip to chance.
+- When the user wants to adjust an existing outfit (swap a piece, make it more casual/feminine/warmer, keep certain pieces), call remix_outfit with the outfitId from the outfits currently on screen and the instruction close to verbatim. Never regenerate from scratch for a remix request.
+- After presenting outfits for the first time, briefly remind them (one short sentence, once) that they can tap "Add yours" on any piece to paste a product link, then try the look on.
+- Always end your turn with exactly one call to respond_to_user. Keep the message itself short (1-3 sentences) — per-outfit reasoning goes in outfitExplanations, referencing the real colors, cuts and trends from the tool results, never inventing fabrics, e.g. "The warm neutral palette keeps the look minimal while the relaxed-tailoring blazer is a current trend."
 - Your message and outfitExplanations render as chat bubbles, not a document: light markdown is fine (occasional **bold** for one or two key words), but never use headers, tables, code blocks, or long bullet lists — write it the way you'd actually say it out loud to someone.
-- If the user goes over budget, mention it plainly and offer a specific swap rather than silently ignoring it.
-- Never invent products that weren't returned by find_outfits/remix_outfit.`;
+- Only describe pieces that were returned by find_outfits/remix_outfit.`;

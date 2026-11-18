@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { Outfit } from "@/lib/types";
-import { ProductSwatch } from "@/components/ProductSwatch";
-import { BudgetIndicator } from "@/components/BudgetIndicator";
+import { PieceThumb } from "@/components/PieceThumb";
+import { OutfitHero } from "@/components/OutfitHero";
+import { PickPanel } from "@/components/PickPanel";
 import { useAppStore } from "@/store/useAppStore";
-import { getShopUrl } from "@/lib/locale";
-import { formatPrice } from "@/lib/currency";
+import { getShoppingSearchUrl } from "@/lib/locale";
+import { pickKey, pieceDetail, pieceSearchQuery, pieceTitle } from "@/lib/pieces";
 
 const REMIX_CHIPS = [
   "Make it more casual",
@@ -29,7 +30,10 @@ export function OutfitCard({
   const saveLook = useAppStore((s) => s.saveLook);
   const loading = useAppStore((s) => s.loading);
   const countryCode = useAppStore((s) => s.countryCode);
-  const fxRates = useAppStore((s) => s.fxRates);
+  const profileGender = useAppStore((s) => s.profile.gender);
+  const picks = useAppStore((s) => s.picks);
+  const setPick = useAppStore((s) => s.setPick);
+  const [pickingId, setPickingId] = useState<string | null>(null);
   const [remixOpen, setRemixOpen] = useState(false);
   const [remixText, setRemixText] = useState("");
   const [justSaved, setJustSaved] = useState(false);
@@ -37,7 +41,8 @@ export function OutfitCard({
   const isSaved = savedIds.has(outfit.id) || justSaved;
 
   const items = outfit.items;
-  const mainItems = items.slice(0, 4);
+  const pickFor = (productId: string) => picks[pickKey(outfit.id, productId)];
+  const pickedCount = items.filter((it) => pickFor(it.product.id)).length;
 
   const handleRemix = (text: string) => {
     if (!text.trim() || loading) return;
@@ -53,62 +58,77 @@ export function OutfitCard({
 
   return (
     <article className="animate-in bg-white rounded-2xl overflow-hidden border border-beige-dark/60 shadow-[0_1px_2px_rgba(35,34,32,0.04)] max-w-[560px] w-full">
-      {/* Outfit visual: mosaic of item swatches */}
-      <div className="grid grid-cols-2 gap-[2px] aspect-[4/3] bg-beige-dark/40">
-        {mainItems.map((it, i) => (
-          <ProductSwatch
-            key={it.product.id + i}
-            product={it.product}
-            className={`w-full h-full ${mainItems.length === 3 && i === 0 ? "row-span-2" : ""}`}
-          />
-        ))}
-      </div>
+      <OutfitHero outfit={outfit} />
 
       <div className="p-6 space-y-5">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h3 className="font-serif text-2xl leading-tight">{outfit.name}</h3>
-            <p className="text-sm text-gray mt-0.5">{outfit.occasion}</p>
+            {outfit.name !== outfit.occasion && <p className="text-sm text-gray mt-0.5">{outfit.occasion}</p>}
           </div>
         </div>
 
-        <BudgetIndicator total={outfit.totalPrice} budget={outfit.budget} />
+        <div className="space-y-1">
+          <p className="text-xs uppercase tracking-wide text-gray">The pieces</p>
+          <p className="text-xs text-gray">
+            Find each one at any store, then paste its link to try the real thing on.
+          </p>
+        </div>
 
-        <ul className="divide-y divide-beige-dark/60 -mx-1">
+        <ul className="divide-y divide-beige-dark/60 -mx-1 -mt-2">
           {items.map((it) => {
-            const price = it.product.salePrice ?? it.product.price;
+            const pick = pickFor(it.product.id);
+            const open = pickingId === it.product.id;
             return (
-              <li key={it.product.id} className="flex items-center gap-3 py-2.5 px-1">
-                <ProductSwatch product={it.product} compact className="w-11 h-11 rounded-md shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-charcoal truncate">{it.product.name}</p>
-                  <p className="text-xs text-gray truncate">{it.product.brand}</p>
+              <li key={it.product.id} className="py-2.5 px-1 space-y-2">
+                <div className="flex items-center gap-3">
+                  <PieceThumb product={it.product} pick={pick} compact className="w-11 h-11 rounded-md shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-charcoal truncate">{pieceTitle(it.product)}</p>
+                    <p className="text-xs text-gray truncate">
+                      {pick ? <span className="text-charcoal-soft">✓ Your pick{pick.title ? ` — ${pick.title}` : ""}</span> : pieceDetail(it.product)}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0 space-y-0.5">
+                    <span className="flex justify-end gap-2.5">
+                      {pick && (
+                        <button
+                          onClick={() => setPick(outfit.id, it.product.id, null)}
+                          className="text-xs text-gray hover:text-accent"
+                        >
+                          Remove
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setPickingId(open ? null : it.product.id)}
+                        className="text-xs text-accent hover:underline"
+                      >
+                        {pick ? "Change" : "Add yours"}
+                      </button>
+                    </span>
+                    <a
+                      href={getShoppingSearchUrl(pieceSearchQuery(it.product), profileGender, countryCode)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-xs text-gray hover:text-charcoal hover:underline"
+                    >
+                      Find it ↗
+                    </a>
+                  </div>
                 </div>
-                <div className="text-right shrink-0">
-                  <p className="text-sm text-charcoal">
-                    {formatPrice(price, countryCode, fxRates)}
-                    {it.product.salePrice && (
-                      <span className="text-gray line-through ml-1 text-xs">
-                        {formatPrice(it.product.price, countryCode, fxRates)}
-                      </span>
-                    )}
-                  </p>
-                  <a
-                    href={getShopUrl(it.product, countryCode)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-accent hover:underline"
-                  >
-                    Shop
-                  </a>
-                </div>
+                {open && (
+                  <PickPanel
+                    onClose={() => setPickingId(null)}
+                    onPick={(p) => {
+                      setPick(outfit.id, it.product.id, p);
+                      setPickingId(null);
+                    }}
+                  />
+                )}
               </li>
             );
           })}
         </ul>
-        <p className="text-xs text-gray -mt-1">
-          ~ marks an estimate, not a live listing — tap Shop for the retailer&apos;s current price.
-        </p>
 
         {outfit.explanation && (
           <p className="text-sm text-charcoal-soft leading-relaxed border-t border-beige-dark/60 pt-4">
@@ -117,16 +137,16 @@ export function OutfitCard({
           </p>
         )}
 
-        <div className="flex flex-wrap gap-2 pt-1">
+        <div className="grid grid-cols-2 gap-2 pt-1 md:flex md:flex-wrap">
           <button
             onClick={() => onTryOn(outfit)}
-            className="px-4 py-2 rounded-full bg-charcoal text-ivory text-sm hover:bg-charcoal-soft transition-colors"
+            className="col-span-2 md:col-auto px-2 md:px-4 py-2.5 md:py-2 rounded-full bg-charcoal text-ivory text-sm hover:bg-charcoal-soft transition-colors"
           >
-            Try it on
+            {pickedCount > 0 ? `Try it on (${pickedCount} of ${items.length} yours)` : "Try it on"}
           </button>
           <button
             onClick={() => setRemixOpen((v) => !v)}
-            className={`px-4 py-2 rounded-full text-sm border transition-colors ${
+            className={`px-2 md:px-4 py-2.5 md:py-2 rounded-full text-sm border transition-colors ${
               remixOpen ? "border-charcoal bg-beige" : "border-beige-dark hover:border-charcoal"
             }`}
           >
@@ -135,7 +155,7 @@ export function OutfitCard({
           <button
             onClick={handleSave}
             disabled={isSaved}
-            className="px-4 py-2 rounded-full text-sm border border-beige-dark hover:border-charcoal transition-colors disabled:opacity-50 disabled:hover:border-beige-dark"
+            className="px-2 md:px-4 py-2.5 md:py-2 rounded-full text-sm border border-beige-dark hover:border-charcoal transition-colors disabled:opacity-50 disabled:hover:border-beige-dark"
           >
             {isSaved ? "Saved ✓" : "Save look"}
           </button>
@@ -169,7 +189,7 @@ export function OutfitCard({
               />
               <button
                 type="submit"
-                className="px-4 py-2 rounded-full bg-charcoal text-ivory text-sm disabled:opacity-40"
+                className="col-span-2 md:col-auto px-2 md:px-4 py-2.5 md:py-2 rounded-full bg-charcoal text-ivory text-sm disabled:opacity-40"
                 disabled={!remixText.trim() || loading}
               >
                 Go

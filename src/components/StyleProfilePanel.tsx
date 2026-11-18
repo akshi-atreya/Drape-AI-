@@ -102,22 +102,6 @@ export function StyleProfilePanel() {
         />
       </Field>
 
-      <Field label="Favorite brands">
-        <TagListInput
-          values={profile.brandsLike}
-          onChange={(v) => updateProfile({ brandsLike: v })}
-          placeholder="e.g. Aritzia"
-        />
-      </Field>
-
-      <Field label="Brands to avoid">
-        <TagListInput
-          values={profile.brandsAvoid}
-          onChange={(v) => updateProfile({ brandsAvoid: v })}
-          placeholder="e.g. H&M"
-        />
-      </Field>
-
       <Field label="Preferred fits">
         <TagListInput
           values={profile.fitPreferences}

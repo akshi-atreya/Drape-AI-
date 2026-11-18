@@ -1,8 +1,9 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
 import { Nav } from "@/components/Nav";
 import { Footer } from "@/components/Footer";
+import { MobileTabBar } from "@/components/MobileTabBar";
 import "./globals.css";
 
 const playfair = Playfair_Display({
@@ -24,6 +25,16 @@ export const metadata: Metadata = {
     "Tell me what you're looking for. I'll find the pieces, build the look, and make it yours.",
 };
 
+// viewport-fit=cover lets the layout use the full screen on notched phones
+// (the tab bar pads itself with env(safe-area-inset-bottom)); themeColor
+// tints the browser/status bar to match the ivory background.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#f8f4ee",
+};
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${playfair.variable} ${inter.variable} h-full`}>
@@ -32,6 +43,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <Nav />
           <main className="flex-1 flex flex-col">{children}</main>
           <Footer />
+          <MobileTabBar />
         </SessionProvider>
       </body>
     </html>

@@ -4,15 +4,24 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trend } from "@/lib/types";
 import { catalog } from "@/lib/catalog";
-import { ProductCard } from "@/components/ProductCard";
 import { useAppStore } from "@/store/useAppStore";
+import { getShoppingSearchUrl } from "@/lib/locale";
 
 export function TrendCard({ trend }: { trend: Trend }) {
   const [shopOpen, setShopOpen] = useState(false);
   const router = useRouter();
   const sendMessage = useAppStore((s) => s.sendMessage);
+  const gender = useAppStore((s) => s.profile.gender);
+  const countryCode = useAppStore((s) => s.countryCode);
 
-  const matches = catalog.filter((p) => p.trendTags.includes(trend.name)).slice(0, 6);
+  // Piece types that express this trend (e.g. "Wool Coat", "Ankle Boots") —
+  // search starting points, not specific products. Live trends carry their own
+  // list; the hand-written fallback derives it from the catalog's trend tags.
+  const pieceTypes = (
+    trend.pieceTypes?.length
+      ? trend.pieceTypes
+      : [...new Set(catalog.filter((p) => (p.trendTags as string[]).includes(trend.name)).map((p) => p.subcategory))]
+  ).slice(0, 8);
 
   const buildLook = () => {
     sendMessage(`Let's build a ${trend.name.toLowerCase()}-forward look.`);
@@ -45,12 +54,26 @@ export function TrendCard({ trend }: { trend: Trend }) {
           </p>
         </div>
 
+        {trend.sources && trend.sources.length > 0 && (
+          <p className="text-xs text-gray leading-relaxed">
+            Seen in{" "}
+            {trend.sources.map((src, i) => (
+              <span key={src.url}>
+                {i > 0 && ", "}
+                <a href={src.url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-charcoal" title={src.title}>
+                  {src.outlet}
+                </a>
+              </span>
+            ))}
+          </p>
+        )}
+
         <div className="flex flex-wrap gap-2 pt-1">
           <button
             onClick={() => setShopOpen((v) => !v)}
             className="px-4 py-2 rounded-full border border-beige-dark text-sm hover:border-charcoal transition-colors"
           >
-            Shop this trend
+            Pieces to look for
           </button>
           <button
             onClick={buildLook}
@@ -62,13 +85,21 @@ export function TrendCard({ trend }: { trend: Trend }) {
 
         {shopOpen && (
           <div className="animate-in pt-3 border-t border-beige-dark/60 space-y-3">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {matches.map((p) => (
-                <ProductCard key={p.id} product={p} />
+            <div className="flex flex-wrap gap-2">
+              {pieceTypes.map((type) => (
+                <a
+                  key={type}
+                  href={getShoppingSearchUrl(`${trend.name} ${type}`.toLowerCase(), gender, countryCode)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded-full bg-beige text-xs text-charcoal-soft hover:bg-beige-dark transition-colors"
+                >
+                  {type} ↗
+                </a>
               ))}
             </div>
             <p className="text-xs text-gray">
-              ~ marks an estimate, not a live listing — tap a piece to see the retailer&apos;s current price.
+              Find one you like, then ask Drape to build a look around it and paste the link to try it on.
             </p>
           </div>
         )}

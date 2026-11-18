@@ -1,4 +1,5 @@
 import type { NextAuthConfig } from "next-auth";
+import { AUTH_DISABLED } from "@/lib/auth-mode";
 
 /**
  * Edge-safe auth config: no database access here (this runs in
@@ -12,6 +13,7 @@ export const authConfig = {
   },
   callbacks: {
     authorized({ auth, request }) {
+      if (AUTH_DISABLED) return true; // local testing only; never true in production
       const isLoggedIn = !!auth?.user;
       const path = request.nextUrl.pathname;
       const isPublicRoute =
@@ -19,6 +21,7 @@ export const authConfig = {
         path.startsWith("/sign-up") ||
         path.startsWith("/api/auth") ||
         path.startsWith("/api/stats") ||
+        path.startsWith("/api/cron") || // secret-protected; Vercel Cron has no session
         path.startsWith("/about");
       if (isPublicRoute) return true;
       return isLoggedIn;

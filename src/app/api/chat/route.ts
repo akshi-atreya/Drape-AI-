@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { emptyStyleProfile, Outfit, StyleProfile } from "@/lib/types";
 import { executeTool, SYSTEM_PROMPT, toolDefinitions, ToolRunContext } from "@/lib/chat-tools";
-import { CountryCode, COUNTRY_LABELS } from "@/lib/locale";
-import { currencyForCountry, fetchFxRates } from "@/lib/currency";
+import { CountryCode } from "@/lib/locale";
+import { getLiveTrends } from "@/lib/live-trends";
 
 export const runtime = "nodejs";
+// Model calls can take a while; Vercel's default function timeout is shorter.
+export const maxDuration = 60;
 
 const MODEL = "claude-sonnet-5";
 const MAX_TOOL_ROUNDS = 8;
@@ -40,6 +42,8 @@ export async function POST(req: NextRequest) {
   const anthropic = new Anthropic({ apiKey });
 
   const countryCode: CountryCode = body.countryCode ?? "US";
+  // Current trends from fashion publications. Cached for hours; if the cache is cold we don't make the shopper wait for a rebuild.
+  const trendData = await getLiveTrends(2500);
   const ctx: ToolRunContext = {
     profile: body.profile ?? emptyStyleProfile,
     outfitsById: new Map((body.currentOutfits ?? []).map((o) => [o.id, o])),
@@ -47,6 +51,7 @@ export async function POST(req: NextRequest) {
     replaces: new Map(),
     freshSetIds: new Set(),
     countryCode,
+    liveTrends: trendData.live ? trendData.trends : null,
   };
 
   const conversation: Anthropic.MessageParam[] = (body.messages ?? []).map((m) => ({
@@ -54,29 +59,22 @@ export async function POST(req: NextRequest) {
     content: m.content,
   }));
 
-  // The catalog/engine/tools work entirely in USD internally — this only
-  // tells the model what currency to *speak* in and how to convert a
-  // budget the user states in their own currency before calling
-  // find_outfits (whose budget parameter is always USD).
-  const currency = currencyForCountry(countryCode);
-  let currencyContext = "";
-  if (currency !== "USD") {
-    const { rates } = await fetchFxRates();
-    const rate = rates[currency];
-    if (rate) {
-      currencyContext = `\n\nCurrency context for this turn: the shopper is in ${COUNTRY_LABELS[countryCode]}, shopping in ${currency}. 1 USD ≈ ${rate.toFixed(2)} ${currency} (current rate). All tool inputs/outputs (budget, prices) are in USD — when you speak to the user, express amounts in ${currency} using this rate (round naturally, e.g. nearest 10 or 100). If the user states a budget in ${currency} or any non-USD currency, convert it to USD with this rate before passing it to find_outfits's budget parameter.`;
-    }
-  }
-
   const targetOutfit = body.targetOutfitId ? ctx.outfitsById.get(body.targetOutfitId) : undefined;
   const targetContext = targetOutfit
     ? `\n\nContext for this turn only: the user's message is about the outfit with id "${targetOutfit.id}" ("${targetOutfit.name}"), currently shown on screen. If this is a modification request, call remix_outfit with that exact outfitId.`
     : "";
 
-  const system = `${SYSTEM_PROMPT}${currencyContext}${targetContext}`;
+  const trendContext = trendData.live
+    ? `\n\nWhat's trending right now (extracted from current fashion publications such as ${trendData.outlets.join(", ")}; updated ${trendData.updatedAt?.slice(0, 10)}):\n${trendData.trends
+        .map((t) => `- ${t.name}: ${t.shortExplanation}`)
+        .join("\n")}\nWhen it genuinely fits, tell the user which current trend a look draws on, by name and in your own words — never invent a trend that isn't listed, and don't quote articles.`
+    : "";
+
+  const system = `${SYSTEM_PROMPT}${trendContext}${targetContext}`;
 
   let finalMessage = "";
   const outfitExplanations = new Map<string, string>();
+  let quickReplies: string[] = [];
 
   try {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -107,8 +105,17 @@ export async function POST(req: NextRequest) {
 
       for (const tu of toolUses) {
         if (tu.name === "respond_to_user") {
-          const input = tu.input as { message: string; outfitExplanations?: { outfitId: string; explanation: string }[] };
+          const input = tu.input as {
+            message: string;
+            quickReplies?: unknown;
+            outfitExplanations?: { outfitId: string; explanation: string }[];
+          };
           finalMessage = input.message;
+          if (Array.isArray(input.quickReplies)) {
+            quickReplies = input.quickReplies
+              .filter((q): q is string => typeof q === "string" && q.trim().length > 0 && q.length <= 40)
+              .slice(0, 5);
+          }
           for (const ex of input.outfitExplanations ?? []) {
             outfitExplanations.set(ex.outfitId, ex.explanation);
           }
@@ -150,8 +157,23 @@ export async function POST(req: NextRequest) {
       isFreshSet: ctx.freshSetIds.has(outfit.id),
     }));
 
+  // Guarantee the gender question always comes with buttons, even if the
+  // model forgot to attach them: no outfits yet, gender still unknown, and
+  // the reply is asking for it.
+  if (
+    quickReplies.length === 0 &&
+    outfits.length === 0 &&
+    !ctx.profile.gender &&
+    /menswear|womenswear|men'?s|women'?s/i.test(finalMessage)
+  ) {
+    quickReplies = ["Womenswear", "Menswear", "No preference"];
+  }
+  // Buttons only make sense alongside a question, not next to finished looks.
+  if (outfits.length > 0) quickReplies = [];
+
   return NextResponse.json({
     reply: finalMessage || "Let's find you something great — what are you shopping for?",
+    quickReplies,
     profile: ctx.profile,
     outfits,
   });

@@ -1,6 +1,6 @@
 // Maps mock catalog color names to actual swatch colors for the generated
 // product placeholders (there is no real product photography in the MVP
-// catalog — see ProductSwatch).
+// catalog.
 export const COLOR_HEX: Record<string, string> = {
   cream: "#f1e9da",
   black: "#1c1b1a",

@@ -38,8 +38,15 @@ export function ChatView() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 md:px-0 py-4 space-y-6">
-        {messages.map((m) => (
-          <ChatMessageBubble key={m.id} message={m} onTryOn={setTryOnOutfit} savedIds={savedOutfitIds} />
+        {messages.map((m, i) => (
+          <ChatMessageBubble
+            key={m.id}
+            message={m}
+            onTryOn={setTryOnOutfit}
+            savedIds={savedOutfitIds}
+            // Quick-reply buttons are live only on the newest message, and only until the user answers.
+            onQuickReply={i === messages.length - 1 && !loading ? sendMessage : undefined}
+          />
         ))}
 
         {loading && (
@@ -56,7 +63,7 @@ export function ChatView() {
         <div ref={bottomRef} />
       </div>
 
-      <div className="sticky bottom-0 bg-gradient-to-t from-ivory via-ivory to-transparent pt-6 pb-6 px-6 md:px-0">
+      <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] md:bottom-0 bg-gradient-to-t from-ivory via-ivory to-transparent pt-6 pb-6 px-6 md:px-0">
         <ChatComposer variant="bar" onSubmit={sendMessage} loading={loading} />
       </div>
 

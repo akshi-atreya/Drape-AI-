@@ -6,12 +6,16 @@ import { v4 as uuid } from "uuid";
 import {
   ChatMessage,
   emptyStyleProfile,
+  emptyTryOnPrefs,
+  GarmentPick,
   Outfit,
   SavedLook,
   StyleProfile,
+  TryOnPrefs,
   WardrobeItem,
 } from "@/lib/types";
 import { CountryCode, detectCountryFromLocale } from "@/lib/locale";
+import { pickKey } from "@/lib/pieces";
 
 interface ChatApiOutfitResult {
   outfit: Outfit;
@@ -29,7 +33,12 @@ interface AppState {
   savedLooks: SavedLook[];
   countryCode: CountryCode;
   countryCodeManuallySet: boolean;
-  fxRates: Record<string, number> | null;
+  /** The generated hero image for each outfit on screen, keyed by outfit id. */
+  outfitImages: Record<string, string>;
+  /** The shopper's own garments for pieces in the outfits on screen, keyed by pickKey(outfitId, productId). */
+  picks: Record<string, GarmentPick>;
+  /** Optional try-on hints (gender / build / height). Kept in the browser only. */
+  tryOnPrefs: TryOnPrefs;
   loading: boolean;
   error: string | null;
 
@@ -37,10 +46,12 @@ interface AppState {
   sendMessage: (text: string, targetOutfitId?: string) => Promise<void>;
   remix: (outfitId: string, instruction: string) => Promise<void>;
   updateProfile: (patch: Partial<StyleProfile>) => void;
-  reviveOutfit: (outfit: Outfit) => void;
+  reviveOutfit: (outfit: Outfit, picks?: Record<string, GarmentPick>, image?: string) => void;
   detectCountry: () => void;
   setCountryCode: (country: CountryCode) => void;
-  fetchFxRates: () => Promise<void>;
+  setTryOnPrefs: (patch: Partial<TryOnPrefs>) => void;
+  setPick: (outfitId: string, productId: string, pick: GarmentPick | null) => void;
+  setOutfitImage: (outfitId: string, image: string) => void;
   addWardrobeItem: (item: Omit<WardrobeItem, "id" | "addedAt">) => void;
   removeWardrobeItem: (id: string) => void;
   saveLook: (look: Omit<SavedLook, "id" | "savedAt">) => void;
@@ -54,7 +65,7 @@ async function callChatApi(
   currentOutfits: Outfit[],
   countryCode: CountryCode,
   targetOutfitId?: string
-): Promise<{ reply: string; profile: StyleProfile; outfits: ChatApiOutfitResult[] }> {
+): Promise<{ reply: string; quickReplies?: string[]; profile: StyleProfile; outfits: ChatApiOutfitResult[] }> {
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -83,7 +94,9 @@ export const useAppStore = create<AppState>()(
       savedLooks: [],
       countryCode: "US",
       countryCodeManuallySet: false,
-      fxRates: null,
+      picks: {},
+      outfitImages: {},
+      tryOnPrefs: emptyTryOnPrefs,
       loading: false,
       error: null,
 
@@ -106,7 +119,7 @@ export const useAppStore = create<AppState>()(
         try {
           const { messages, profile, outfitsById, outfitOrder, countryCode } = get();
           const currentOutfits = outfitOrder.map((id) => outfitsById[id]).filter(Boolean);
-          const { reply, profile: newProfile, outfits } = await callChatApi(
+          const { reply, quickReplies, profile: newProfile, outfits } = await callChatApi(
             messages,
             profile,
             currentOutfits,
@@ -115,10 +128,19 @@ export const useAppStore = create<AppState>()(
           );
 
           const nextOutfitsById = { ...get().outfitsById };
+          const nextPicks = { ...get().picks };
           const newIds: string[] = [];
-          for (const { outfit } of outfits) {
+          for (const { outfit, replacesId } of outfits) {
             nextOutfitsById[outfit.id] = outfit;
             newIds.push(outfit.id);
+            // A remix keeps the shopper's chosen garments for every piece that
+            // survived; pieces the remix swapped out lose theirs.
+            if (replacesId) {
+              for (const it of outfit.items) {
+                const old = nextPicks[pickKey(replacesId, it.product.id)];
+                if (old) nextPicks[pickKey(outfit.id, it.product.id)] = old;
+              }
+            }
           }
 
           // Merge into display order: a fresh find_outfits call replaces the
@@ -141,6 +163,7 @@ export const useAppStore = create<AppState>()(
             id: uuid(),
             role: "assistant",
             content: reply,
+            quickReplies: quickReplies?.length ? quickReplies : undefined,
             outfits: newIds.map((id) => nextOutfitsById[id]),
             createdAt: new Date().toISOString(),
           };
@@ -149,6 +172,7 @@ export const useAppStore = create<AppState>()(
             messages: [...get().messages, assistantMsg],
             profile: newProfile,
             outfitsById: nextOutfitsById,
+            picks: nextPicks,
             outfitOrder: newIds.length ? nextOrder : get().outfitOrder,
             loading: false,
           }));
@@ -170,20 +194,29 @@ export const useAppStore = create<AppState>()(
         set((s) => (s.countryCodeManuallySet ? {} : { countryCode: detectCountryFromLocale() })),
       setCountryCode: (country) => set({ countryCode: country, countryCodeManuallySet: true }),
 
-      fetchFxRates: async () => {
-        if (get().fxRates) return; // fetch once per session
-        try {
-          const res = await fetch("/api/fx");
-          const data = await res.json();
-          if (data.rates) set({ fxRates: data.rates });
-        } catch {
-          // Non-fatal — formatPrice() falls back to its static rate table.
-        }
-      },
+      setTryOnPrefs: (patch) => set((s) => ({ tryOnPrefs: { ...s.tryOnPrefs, ...patch } })),
 
-      reviveOutfit: (outfit) =>
+      setOutfitImage: (outfitId, image) => set((s) => ({ outfitImages: { ...s.outfitImages, [outfitId]: image } })),
+
+      setPick: (outfitId, productId, pick) =>
+        set((s) => {
+          const key = pickKey(outfitId, productId);
+          const next = { ...s.picks };
+          if (pick) next[key] = pick;
+          else delete next[key];
+          return { picks: next };
+        }),
+
+      reviveOutfit: (outfit, picks, image) =>
         set((s) => ({
           chatStarted: true,
+          outfitImages: image ? { ...s.outfitImages, [outfit.id]: image } : s.outfitImages,
+          picks: {
+            ...s.picks,
+            ...Object.fromEntries(
+              Object.entries(picks ?? {}).map(([productId, pick]) => [pickKey(outfit.id, productId), pick])
+            ),
+          },
           outfitsById: { ...s.outfitsById, [outfit.id]: outfit },
           outfitOrder: s.outfitOrder.includes(outfit.id) ? s.outfitOrder : [...s.outfitOrder, outfit.id],
           messages: [
@@ -210,18 +243,30 @@ export const useAppStore = create<AppState>()(
         set((s) => ({ wardrobe: s.wardrobe.filter((w) => w.id !== id) })),
 
       saveLook: (look) =>
-        set((s) => ({
-          savedLooks: [
-            { ...look, id: uuid(), savedAt: new Date().toISOString() },
-            ...s.savedLooks,
-          ],
-        })),
+        set((s) => {
+          let picks = look.picks;
+          if (!picks && look.type === "outfit" && look.outfit) {
+            const outfit = look.outfit;
+            const collected: Record<string, GarmentPick> = {};
+            for (const it of outfit.items) {
+              const pick = s.picks[pickKey(outfit.id, it.product.id)];
+              if (pick) collected[it.product.id] = pick;
+            }
+            if (Object.keys(collected).length) picks = collected;
+          }
+          return {
+            savedLooks: [
+              { ...look, picks, image: look.image ?? (look.type === "outfit" && look.outfit ? s.outfitImages[look.outfit.id] : undefined), id: uuid(), savedAt: new Date().toISOString() },
+              ...s.savedLooks,
+            ],
+          };
+        }),
 
       removeSavedLook: (id) =>
         set((s) => ({ savedLooks: s.savedLooks.filter((l) => l.id !== id) })),
 
       resetChat: () =>
-        set({ chatStarted: false, messages: [], outfitOrder: [], outfitsById: {} }),
+        set({ chatStarted: false, messages: [], outfitOrder: [], outfitsById: {}, picks: {}, outfitImages: {} }),
     }),
     {
       name: "ai-fashion-shopper-store",
@@ -235,6 +280,7 @@ export const useAppStore = create<AppState>()(
         savedLooks: s.savedLooks,
         countryCode: s.countryCode,
         countryCodeManuallySet: s.countryCodeManuallySet,
+        tryOnPrefs: s.tryOnPrefs,
       }),
     }
   )

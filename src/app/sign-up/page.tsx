@@ -76,7 +76,7 @@ export default function SignUpPage() {
               autoComplete="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-white border border-beige-dark rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-charcoal"
+              className="w-full bg-white border border-beige-dark rounded-xl px-4 py-2.5 text-base md:text-sm outline-none focus:ring-1 focus:ring-charcoal"
             />
           </div>
           <div className="space-y-1.5">
@@ -90,7 +90,7 @@ export default function SignUpPage() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-white border border-beige-dark rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-charcoal"
+              className="w-full bg-white border border-beige-dark rounded-xl px-4 py-2.5 text-base md:text-sm outline-none focus:ring-1 focus:ring-charcoal"
             />
           </div>
           <div className="space-y-1.5">
@@ -105,7 +105,7 @@ export default function SignUpPage() {
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-white border border-beige-dark rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-charcoal"
+              className="w-full bg-white border border-beige-dark rounded-xl px-4 py-2.5 text-base md:text-sm outline-none focus:ring-1 focus:ring-charcoal"
             />
             <p className="text-xs text-gray">At least 8 characters.</p>
           </div>
@@ -120,7 +120,7 @@ export default function SignUpPage() {
               autoComplete="new-password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full bg-white border border-beige-dark rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-charcoal"
+              className="w-full bg-white border border-beige-dark rounded-xl px-4 py-2.5 text-base md:text-sm outline-none focus:ring-1 focus:ring-charcoal"
             />
           </div>
 

@@ -1,11 +1,15 @@
 import { Trend } from "@/lib/types";
 
-// Editorial trend intelligence. In production this would be generated/updated
-// from a trend-scoring pipeline over the live catalog + web signals; for the
-// MVP it's a curated static abstraction with the same shape.
+// Hand-written fallback trends, used only when the live feed pipeline
+// (src/lib/live-trends.ts) is unavailable — no API key, feeds unreachable, or
+// extraction failed. Normally the Trends page and the recommendation engine
+// use trends extracted from current fashion publications instead.
 export const trends: Trend[] = [
   {
     id: "t-burgundy",
+    pieceTypes: ["Wool Coat","Knit Top","Turtleneck","Ankle Boots","Shoulder Bag","Midi Dress"],
+    colors: ["burgundy","rust"],
+    strength: 0.7,
     name: "Burgundy",
     season: "Fall 2026",
     heroColor: "#5b2333",
@@ -18,6 +22,9 @@ export const trends: Trend[] = [
   },
   {
     id: "t-suede",
+    pieceTypes: ["Suede Jacket","Ankle Boots","Chelsea Boots","Shoulder Bag","Loafers"],
+    colors: ["brown","camel","beige"],
+    strength: 0.65,
     name: "Suede",
     season: "Fall 2026",
     heroColor: "#8a6a4f",
@@ -30,6 +37,9 @@ export const trends: Trend[] = [
   },
   {
     id: "t-relaxed-tailoring",
+    pieceTypes: ["Blazer","Wide-Leg Trousers","Tailored Trousers","Chinos","Overshirt"],
+    colors: ["charcoal","navy","beige"],
+    strength: 0.7,
     name: "Relaxed Tailoring",
     season: "Fall 2026",
     heroColor: "#3a3a38",
@@ -42,6 +52,9 @@ export const trends: Trend[] = [
   },
   {
     id: "t-statement-accessories",
+    pieceTypes: ["Belt","Sunglasses","Jewelry Set","Watch"],
+    colors: [],
+    strength: 0.5,
     name: "Statement Accessories",
     season: "Fall 2026",
     heroColor: "#c9a24b",
@@ -54,6 +67,9 @@ export const trends: Trend[] = [
   },
   {
     id: "t-ballet-flats",
+    pieceTypes: ["Ballet Flats","Loafers"],
+    colors: ["black","cream","burgundy"],
+    strength: 0.55,
     name: "Ballet Flats",
     season: "Fall 2026",
     heroColor: "#d8c9b8",
@@ -66,6 +82,9 @@ export const trends: Trend[] = [
   },
   {
     id: "t-layering",
+    pieceTypes: ["Turtleneck","Knit Top","Slip Dress","Blazer","Overshirt","Wool Coat"],
+    colors: [],
+    strength: 0.6,
     name: "Layering",
     season: "Fall 2026",
     heroColor: "#6b5d4f",

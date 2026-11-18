@@ -1,14 +1,11 @@
 import { GoogleGenAI } from "@google/genai";
-import { OutfitItem } from "@/lib/types";
 
 /**
- * Real virtual try-on via Gemini's image model (gemini-3.1-flash-image, aka
- * "Nano Banana 2"). Given the mock catalog has no real garment photography,
- * a garment-photo-based try-on model (which needs a picture of the actual
- * item) isn't viable here — instead we hand Gemini the user's photo plus a
- * precise text description of the outfit's colors/materials/silhouette
- * (which we do have from the structured catalog) and ask it to edit the
- * photo to show that outfit on the person, preserving their identity.
+ * Real virtual try-on via Gemini's image model (gemini-3.1-flash-image).
+ * Drape recommends garment types; the shopper attaches the actual product
+ * photo for each piece (pasted link or upload). Those photos are passed to
+ * the model alongside the person's photo so it dresses them in the real
+ * garments. Any piece without a photo falls back to a text description.
  */
 
 const MODEL = "gemini-3.1-flash-image";
@@ -18,9 +15,18 @@ export interface TryOnResult {
   error?: string;
 }
 
-function describeItem(item: OutfitItem): string {
-  const p = item.product;
-  return `${p.primaryColor} ${p.material} ${p.subcategory.toLowerCase()} (${p.fit} fit)`;
+/** Optional shopper hints; any field left out means "match the photo". */
+export interface TryOnSubject {
+  gender?: "Women" | "Men";
+  build?: string;
+  height?: string;
+}
+
+export interface TryOnPiece {
+  /** What the piece is, e.g. "charcoal satin blouse (cropped fit)". */
+  description: string;
+  /** The shopper's own photo of the real garment, if they added one. */
+  imageDataUrl?: string;
 }
 
 function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | null {
@@ -31,7 +37,8 @@ function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | nul
 
 export async function generateTryOnImage(
   photoDataUrl: string,
-  items: OutfitItem[]
+  pieces: TryOnPiece[],
+  subject: TryOnSubject = {}
 ): Promise<TryOnResult> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -46,15 +53,43 @@ export async function generateTryOnImage(
     return { error: "That photo couldn't be read. Please try a different image." };
   }
 
-  const outfitDescription = items.map(describeItem).join(", ");
-  const prompt = `Using the person in the reference photo, generate a NEW full-body fashion photo of them wearing this complete outfit: ${outfitDescription}.
+  // Reference images, in order: the person first, then each supplied garment.
+  const garmentImages: { piece: TryOnPiece; image: { mimeType: string; data: string } }[] = [];
+  const describedOnly: TryOnPiece[] = [];
+  for (const piece of pieces) {
+    const parsed = piece.imageDataUrl ? parseDataUrl(piece.imageDataUrl) : null;
+    if (parsed) garmentImages.push({ piece, image: parsed });
+    else describedOnly.push(piece);
+  }
 
+  const lines: string[] = [];
+  garmentImages.forEach((g, i) => {
+    lines.push(`- Garment image ${i + 2} (${g.piece.description}): put this exact garment on the person — match its real color, fabric, cut, pattern, and details from the photo.`);
+  });
+  describedOnly.forEach((p) => lines.push(`- ${p.description} (no photo — use the description).`));
+
+  const subjectLines: string[] = [];
+  if (subject.gender) subjectLines.push(subject.gender === "Women" ? "- The person is a woman." : "- The person is a man.");
+  if (subject.build) {
+    subjectLines.push(
+      `- Their build is ${subject.build.toLowerCase()}. Use this to shape their body ONLY if Image 1 doesn't show their full body; if it does, keep their body and proportions exactly as they appear in Image 1.`
+    );
+  }
+  if (subject.height) {
+    subjectLines.push(`- Their height is about ${subject.height}. Use it for proportions only where Image 1 doesn't show it.`);
+  }
+  const subjectBlock = subjectLines.length ? `\nAbout the person:\n${subjectLines.join("\n")}\n` : "";
+
+  const prompt = `Image 1 is the person. Generate a NEW full-body fashion photo of that person wearing this complete outfit:
+${lines.join("\n")}
+${subjectBlock}
 Requirements:
-- Keep their face, skin tone, hair, and identity clearly recognizable and consistent with the reference photo.
+- The garment photos may show the item on a hanger, flat-lay, or on another model — use only the garment itself, not any model, mannequin, background, or watermark in those photos.
+- Keep the person's face, skin tone, hair, and identity clearly recognizable and consistent with Image 1.
 - Show the ENTIRE outfit from head to toe — full body, feet included, vertical portrait framing, nothing cropped.
-- Pose them standing naturally like a fashion model or lookbook photo: relaxed, upright, facing the camera or in a natural three-quarter turn — NOT the pose/crop/angle from the reference photo.
-- If the reference photo is only a headshot, close-up, or partial body, invent a plausible, proportionate full body for them and continue the same face/identity onto it.
-- Use a clean, neutral studio or softly lit indoor background — not the reference photo's original background.
+- Pose them standing naturally like a fashion model or lookbook photo: relaxed, upright, facing the camera or in a natural three-quarter turn — NOT the pose/crop/angle from Image 1.
+- If Image 1 is only a headshot, close-up, or partial body, invent a plausible, proportionate full body for them and continue the same face/identity onto it.
+- Use a clean, neutral studio or softly lit indoor background — not Image 1's original background.
 - The result must look like a single realistic photograph (not a collage, sketch, or illustration), well-lit, in sharp focus.`;
 
   const ai = new GoogleGenAI({ apiKey });
@@ -64,6 +99,7 @@ Requirements:
       model: MODEL,
       contents: [
         { inlineData: { mimeType: photo.mimeType, data: photo.data } },
+        ...garmentImages.map((g) => ({ inlineData: { mimeType: g.image.mimeType, data: g.image.data } })),
         { text: prompt },
       ],
       config: {

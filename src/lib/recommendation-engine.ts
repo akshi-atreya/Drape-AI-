@@ -10,6 +10,7 @@ import {
   Product,
   Retailer,
   StyleTag,
+  Trend,
   TrendTag,
 } from "@/lib/types";
 
@@ -66,6 +67,8 @@ export interface OutfitRequest {
   season: string | null;
   ownedItemNames: string[];
   count: number;
+  /** Trends extracted from current fashion publications; null = fall back to the catalog's built-in trend scores. */
+  liveTrends: Trend[] | null;
 }
 
 export const defaultOutfitRequest: OutfitRequest = {
@@ -83,6 +86,7 @@ export const defaultOutfitRequest: OutfitRequest = {
   season: null,
   ownedItemNames: [],
   count: 3,
+  liveTrends: null,
 };
 
 const NEUTRAL_COLORS = new Set([
@@ -122,7 +126,31 @@ function effectivePrice(p: Product): number {
   return p.salePrice ?? p.price;
 }
 
-function trendIntensity(p: Product): number {
+/** How strongly a piece matches one live trend: its type counts most, its color adds to it. */
+function trendMatch(p: Product, t: Trend): number {
+  const typeHit = t.pieceTypes?.includes(p.subcategory) ? 0.6 : 0;
+  const colorHit = t.colors?.includes(p.primaryColor) ? 0.4 : 0;
+  return (typeHit + colorHit) * (t.strength ?? 0.6);
+}
+
+/** Names of the current trends a piece expresses — used so explanations can cite real trends. */
+export function matchedTrendNames(p: Product, trends: Trend[] | null): string[] {
+  if (!trends?.length) return [];
+  return trends
+    .map((t) => ({ name: t.name, m: trendMatch(p, t), typeHit: t.pieceTypes?.includes(p.subcategory) }))
+    // A color match alone is too weak to call something "on-trend".
+    .filter((x) => x.typeHit && x.m >= 0.3)
+    .sort((a, b) => b.m - a.m)
+    .slice(0, 2)
+    .map((x) => x.name);
+}
+
+function trendIntensity(p: Product, live: Trend[] | null): number {
+  if (live?.length) {
+    // Real, current trends: the best match across them. Pieces that match
+    // nothing sit at a low "timeless" baseline.
+    return Math.max(0.1, ...live.map((t) => trendMatch(p, t)));
+  }
   const scores = Object.values(p.trendScores);
   if (scores.length === 0) return 0.15; // quietly-timeless baseline
   return scores.reduce((a, b) => a + (b ?? 0), 0) / scores.length;
@@ -187,8 +215,13 @@ export function scoreProduct(product: Product, req: OutfitRequest): ScoredProduc
   // piece is. A classic user (trendLevel -> 0) scores timeless pieces
   // highest; a trendsetter (trendLevel -> 1) scores trend-heavy pieces
   // highest.
-  const intensity = trendIntensity(product);
-  const trend = req.trendLevel * intensity + (1 - req.trendLevel) * (1 - intensity);
+  //
+  // Everyone gets a mild pull toward what's current (a trendLevel of exactly
+  // 0.5 used to score every piece identically, so trends had no effect on a
+  // default shopper); the slider then tilts it toward trend-led or timeless.
+  const intensity = trendIntensity(product, req.liveTrends);
+  const tilted = req.trendLevel * intensity + (1 - req.trendLevel) * (1 - intensity);
+  const trend = 0.35 * intensity + 0.65 * tilted;
 
   // Brand/retailer preference.
   let brand = 0.6;
@@ -199,7 +232,7 @@ export function scoreProduct(product: Product, req: OutfitRequest): ScoredProduc
   }
 
   const score =
-    style * 0.25 + color * 0.15 + occasion * 0.3 + trend * 0.2 + brand * 0.1;
+    style * 0.25 + color * 0.15 + occasion * 0.3 + trend * 0.3;
 
   return { product, score, breakdown: { style, color, occasion, trend, brand } };
 }

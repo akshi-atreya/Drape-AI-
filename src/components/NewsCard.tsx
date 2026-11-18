@@ -9,7 +9,7 @@ export function NewsCard({ article }: { article: NewsArticle }) {
   const sendMessage = useAppStore((s) => s.sendMessage);
 
   const buildLook = () => {
-    sendMessage(article.headline.replace(/^Why /, "Build me a ").replace(/ is everywhere.*/, " look."));
+    sendMessage(`Build me a look inspired by this story: "${article.headline}"`);
     router.push("/");
   };
 
@@ -24,7 +24,13 @@ export function NewsCard({ article }: { article: NewsArticle }) {
         <h3 className="font-serif text-xl leading-snug">{article.headline}</h3>
         <p className="text-sm text-charcoal-soft leading-relaxed flex-1">{article.summary}</p>
         <div className="flex items-center justify-between pt-1">
-          <span className="text-xs text-gray">{article.source}</span>
+          {article.url.startsWith("https://") ? (
+            <a href={article.url} target="_blank" rel="noopener noreferrer" className="text-xs text-gray hover:text-charcoal hover:underline">
+              {article.source} ↗
+            </a>
+          ) : (
+            <span className="text-xs text-gray">{article.source}</span>
+          )}
           <button onClick={buildLook} className="text-xs text-accent hover:underline">
             Build this look
           </button>

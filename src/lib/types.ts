@@ -135,9 +135,6 @@ export interface StyleProfile {
   trendLevel: TrendLevel;
   colorsLike: string[];
   colorsAvoid: string[];
-  brandsLike: string[];
-  brandsAvoid: string[];
-  priceRange: [number, number] | null;
   fitPreferences: string[];
   favoriteCategories: Category[];
   avoidedCategories: Category[];
@@ -150,14 +147,39 @@ export const emptyStyleProfile: StyleProfile = {
   trendLevel: 0.5,
   colorsLike: [],
   colorsAvoid: [],
-  brandsLike: [],
-  brandsAvoid: [],
-  priceRange: null,
   fitPreferences: [],
   favoriteCategories: [],
   avoidedCategories: [],
   occasions: [],
 };
+
+/**
+ * A real garment the shopper chose themselves — a product photo pulled from
+ * a link they pasted, or an image they uploaded. Drape recommends piece
+ * *types*; the shopper supplies the actual item, and try-on uses its photo.
+ */
+export type BodyBuild = "Slim" | "Average" | "Athletic" | "Curvy" | "Plus-size";
+export const BODY_BUILDS: BodyBuild[] = ["Slim", "Average", "Athletic", "Curvy", "Plus-size"];
+
+/**
+ * Optional hints that shape the try-on image. null = "match my photo": the
+ * model keeps whatever the photo shows instead of being told what to render.
+ */
+export interface TryOnPrefs {
+  gender: "Women" | "Men" | null;
+  build: BodyBuild | null;
+  /** Free text, e.g. 5'6" or 168 cm. Empty = not provided. */
+  height: string;
+}
+
+export const emptyTryOnPrefs: TryOnPrefs = { gender: null, build: null, height: "" };
+
+export interface GarmentPick {
+  imageDataUrl: string;
+  /** Page the garment came from, if it was added by link. */
+  sourceUrl?: string;
+  title?: string;
+}
 
 export interface OutfitItem {
   product: Product;
@@ -193,6 +215,10 @@ export interface SavedLook {
   id: string;
   type: "outfit" | "product" | "trend";
   outfit?: Outfit;
+  /** The shopper's chosen garments for this outfit, keyed by product id. */
+  picks?: Record<string, GarmentPick>;
+  /** The illustrative image generated for this outfit (JPEG data URL). */
+  image?: string;
   product?: Product;
   trendName?: string;
   savedAt: string;
@@ -203,17 +229,33 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   outfits?: Outfit[];
+  /** Tap-to-reply options offered with a question the stylist asked. */
+  quickReplies?: string[];
   createdAt: string;
+}
+
+/** A published article a trend was drawn from — shown as attribution with a link back. */
+export interface TrendSource {
+  outlet: string;
+  title: string;
+  url: string;
 }
 
 export interface Trend {
   id: string;
-  name: TrendTag;
+  name: string;
   season: string;
   heroColor: string;
   shortExplanation: string;
   whyTrending: string;
   howToWear: string;
+  /** Catalog piece types (subcategories) that express this trend, e.g. "Wool Coat". Drives recommendations. */
+  pieceTypes?: string[];
+  /** Catalog color names tied to this trend. */
+  colors?: string[];
+  /** 0–1: how prominent the trend is right now. */
+  strength?: number;
+  sources?: TrendSource[];
 }
 
 export interface NewsArticle {

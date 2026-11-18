@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 
 const ROTATING_PLACEHOLDERS = [
-  "Build me a date-night outfit under $150...",
+  "Build me a date-night outfit...",
   "I need 5 outfits for Paris in October...",
-  "Find me a wedding guest outfit under $200...",
+  "What should I wear to a wedding in June?",
   "I want something trendy but timeless...",
   "I have these black boots. What can I wear with them?",
   "I need a work wardrobe for fall...",
@@ -111,7 +111,7 @@ export function ChatComposer({
           onChange={(e) => setValue(e.target.value)}
           placeholder={isHero ? ROTATING_PLACEHOLDERS[placeholderIdx] : "Tell me what you're looking for..."}
           className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-gray ${
-            isHero ? "text-base md:text-lg" : "text-sm"
+            isHero ? "text-base md:text-lg" : "text-base md:text-sm"
           }`}
         />
         {voiceSupported && (
