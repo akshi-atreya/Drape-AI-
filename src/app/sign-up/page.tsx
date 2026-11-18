@@ -57,7 +57,7 @@ export default function SignUpPage() {
       <div className="animate-in w-full max-w-sm">
         <div className="text-center mb-10">
           <Link href="/" className="font-serif text-2xl tracking-tight">
-            FitCast
+            FitCast AI
           </Link>
           <h1 className="font-serif text-3xl mt-6">Create your account</h1>
           <p className="text-charcoal-soft text-sm mt-2">

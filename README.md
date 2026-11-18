@@ -1,6 +1,6 @@
-# FitCast — your AI fashion suggestion friend
+# FitCast AI — your AI fashion suggestion friend
 
-Chat with an AI stylist about an occasion. FitCast designs complete looks made
+Chat with an AI stylist about an occasion. FitCast AI designs complete looks made
 of piece *types* ("a charcoal blouse, cropped cut"), shows one illustrative
 image of the look, and you pick the real items from any store — paste a product
 link or upload a photo — then see the whole outfit on you with virtual try-on.

@@ -99,7 +99,7 @@ export function TrendCard({ trend }: { trend: Trend }) {
               ))}
             </div>
             <p className="text-xs text-gray">
-              Find one you like, then ask FitCast to build a look around it and paste the link to try it on.
+              Find one you like, then ask FitCast AI to build a look around it and paste the link to try it on.
             </p>
           </div>
         )}

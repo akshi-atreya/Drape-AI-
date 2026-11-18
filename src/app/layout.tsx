@@ -20,9 +20,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "FitCast — Your AI Personal Shopper",
+  title: "FitCast AI — Your Fashion Suggestion Friend",
   description:
-    "Tell me the occasion. I'll design the look, you pick the pieces from any store, and FitCast shows you how it looks on you.",
+    "Tell me the occasion. I'll design the look, you pick the pieces from any store, and FitCast AI shows you how it looks on you.",
 };
 
 // viewport-fit=cover lets the layout use the full screen on notched phones
