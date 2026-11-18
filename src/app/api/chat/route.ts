@@ -25,6 +25,27 @@ interface ChatRequestBody {
   locationDenied?: boolean;
 }
 
+/** Compact, sanitized summary of the saved profile for the model (the profile comes from the browser). */
+function profileBlock(p: StyleProfile | undefined): string {
+  if (!p) return "";
+  const clean = (v: unknown, max = 40) => String(v).replace(/[^\p{L}\p{N}\s,'&-]/gu, "").trim().slice(0, max);
+  const list = (arr: unknown) => (Array.isArray(arr) ? arr.slice(0, 8).map((x) => clean(x)).filter(Boolean) : []);
+  const parts: string[] = [];
+  if (p.gender === "Women") parts.push("shopping for womenswear");
+  else if (p.gender === "Men") parts.push("shopping for menswear");
+  else if (p.gender === "Unisex") parts.push("no gender preference");
+  const styles = list(p.styles);
+  if (styles.length) parts.push(`style: ${styles.join(", ")}`);
+  const likes = list(p.colorsLike);
+  if (likes.length) parts.push(`likes colors: ${likes.join(", ")}`);
+  const avoid = list(p.colorsAvoid);
+  if (avoid.length) parts.push(`avoids colors: ${avoid.join(", ")}`);
+  const fits = list(p.fitPreferences);
+  if (fits.length) parts.push(`fit: ${fits.join(", ")}`);
+  if (!parts.length) return "";
+  return `\n\nSaved shopper profile (remembered from earlier visits): ${parts.join("; ")}. Use it and don't ask again for anything already listed. Only ask about menswear/womenswear again if the user says this look is for someone else.`;
+}
+
 /** The weather arrives from the browser, so re-validate it before it reaches the prompt or the engine. */
 function cleanWeather(w: unknown): WeatherContext | null {
   if (!w || typeof w !== "object") return null;
@@ -117,7 +138,7 @@ export async function POST(req: NextRequest) {
 
   const weatherContext = weatherPromptBlock(weather, !body.locationDenied);
 
-  const system = `${SYSTEM_PROMPT}${weatherContext}${trendContext}${targetContext}`;
+  const system = `${SYSTEM_PROMPT}${profileBlock(ctx.profile)}${weatherContext}${trendContext}${targetContext}`;
 
   let finalMessage = "";
   const outfitExplanations = new Map<string, string>();
@@ -216,12 +237,10 @@ export async function POST(req: NextRequest) {
     }));
 
   // Guarantee the gender question always comes with buttons, even if the
-  // model forgot to attach them: no outfits yet, gender still unknown, and
-  // the reply is asking for it.
+  // model forgot to attach them: no outfits yet and the reply is asking for it.
   if (
     quickReplies.length === 0 &&
     outfits.length === 0 &&
-    !ctx.profile.gender &&
     /menswear|womenswear|men'?s|women'?s/i.test(finalMessage)
   ) {
     quickReplies = ["Womenswear", "Menswear", "No preference"];
