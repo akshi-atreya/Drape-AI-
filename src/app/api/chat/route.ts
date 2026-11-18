@@ -136,11 +136,22 @@ export async function POST(req: NextRequest) {
       if (done) break;
     }
   } catch (err) {
-    console.error("Chat route error:", err);
-    return NextResponse.json(
-      { error: "The AI stylist ran into an error. Please try again." },
-      { status: 502 }
-    );
+    // Full detail goes to the server logs; the shopper gets a message that says
+    // what kind of problem it is without revealing configuration details.
+    const status = err instanceof Anthropic.APIError ? err.status : undefined;
+    console.error("Chat route error:", { status, name: err instanceof Error ? err.name : typeof err, message: err instanceof Error ? err.message.slice(0, 300) : String(err) });
+
+    let message = "The AI stylist ran into an error. Please try again.";
+    if (status === 401 || status === 403) {
+      message = "The stylist isn't set up correctly on the server right now (the AI service rejected its credentials). The site owner needs to check the API key.";
+    } else if (status === 429 || status === 529) {
+      message = "The stylist is very busy right now. Please try again in a moment.";
+    } else if (status === 400 && err instanceof Error && /credit balance|billing/i.test(err.message)) {
+      message = "The stylist is temporarily unavailable (the AI account is out of credits). The site owner needs to top it up.";
+    } else if (status === 404) {
+      message = "The stylist is misconfigured on the server (unknown AI model).";
+    }
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 
   for (const [id, explanation] of outfitExplanations) {

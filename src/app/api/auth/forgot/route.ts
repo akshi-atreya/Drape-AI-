@@ -28,6 +28,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
   }
 
+  // Be honest if email isn't set up, rather than claiming a link is on its way.
+  // (This reveals only server configuration, not whether any account exists.)
+  if (process.env.NODE_ENV === "production" && !process.env.RESEND_API_KEY) {
+    return NextResponse.json(
+      { error: "Password reset by email isn't available yet. Please contact the site owner." },
+      { status: 503 }
+    );
+  }
+
   try {
     const result = await createPasswordResetToken(email);
     if (result) {
