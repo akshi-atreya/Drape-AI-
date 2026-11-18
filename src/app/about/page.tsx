@@ -1,6 +1,6 @@
 export const metadata = {
-  title: "About — Drape",
-  description: "Who built Drape.",
+  title: "About — FitCast",
+  description: "Who built FitCast.",
 };
 
 export default function AboutPage() {
@@ -19,7 +19,7 @@ export default function AboutPage() {
           </div>
 
           <p className="text-charcoal-soft text-base md:text-lg leading-relaxed">
-            Drape is built and designed by Akshi Atreya, pursuing an MS in Management of
+            FitCast is built and designed by Akshi Atreya, pursuing an MS in Management of
             Technology (MOT) at NYU.
           </p>
 

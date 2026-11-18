@@ -28,7 +28,7 @@ export function profileToOutfitRequest(
     trendLevel: turn.trendLevel ?? profile.trendLevel,
     colorsLike: [...profile.colorsLike, ...(turn.colorsLike ?? [])],
     colorsAvoid: [...profile.colorsAvoid, ...(turn.colorsAvoid ?? [])],
-    // Drape recommends garment types, not branded products or price points,
+    // FitCast recommends garment types, not branded products or price points,
     // so brand and budget never constrain the engine.
     brandsLike: [],
     brandsAvoid: [],

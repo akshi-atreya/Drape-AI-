@@ -20,9 +20,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Drape — Your AI Personal Shopper",
+  title: "FitCast — Your AI Personal Shopper",
   description:
-    "Tell me what you're looking for. I'll find the pieces, build the look, and make it yours.",
+    "Tell me the occasion. I'll design the look, you pick the pieces from any store, and FitCast shows you how it looks on you.",
 };
 
 // viewport-fit=cover lets the layout use the full screen on notched phones

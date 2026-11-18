@@ -21,7 +21,7 @@ export default async function TrendsPage() {
           </p>
           <p className="text-xs text-gray">
             {live && updatedAt
-              ? `Updated ${new Date(updatedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} from ${outlets.join(", ")}. Trend summaries are written by Drape; articles link back to the original.`
+              ? `Updated ${new Date(updatedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} from ${outlets.join(", ")}. Trend summaries are written by FitCast; articles link back to the original.`
               : "Live trend feed unavailable right now — showing our curated edit."}
           </p>
         </div>

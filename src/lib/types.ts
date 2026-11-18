@@ -155,7 +155,7 @@ export const emptyStyleProfile: StyleProfile = {
 
 /**
  * A real garment the shopper chose themselves — a product photo pulled from
- * a link they pasted, or an image they uploaded. Drape recommends piece
+ * a link they pasted, or an image they uploaded. FitCast recommends piece
  * *types*; the shopper supplies the actual item, and try-on uses its photo.
  */
 export type BodyBuild = "Slim" | "Average" | "Athletic" | "Curvy" | "Plus-size";

@@ -31,7 +31,7 @@ export interface FeedItem {
   categories: string[];
 }
 
-const USER_AGENT = "Drape/1.0 (fashion trend reader; RSS)";
+const USER_AGENT = "FitCast/1.0 (fashion trend reader; RSS)";
 const TIMEOUT_MS = 10_000;
 const MAX_FEED_BYTES = 900_000; // Who What Wear's feed alone is ~3 MB; the newest items are first.
 const PER_FEED_LIMIT = 20;

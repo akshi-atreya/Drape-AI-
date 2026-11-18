@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 
 /**
  * Real virtual try-on via Gemini's image model (gemini-3.1-flash-image).
- * Drape recommends garment types; the shopper attaches the actual product
+ * FitCast recommends garment types; the shopper attaches the actual product
  * photo for each piece (pasted link or upload). Those photos are passed to
  * the model alongside the person's photo so it dresses them in the real
  * garments. Any piece without a photo falls back to a text description.

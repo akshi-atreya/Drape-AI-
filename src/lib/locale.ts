@@ -1,7 +1,7 @@
 import { Gender } from "@/lib/types";
 
 /**
- * Region support. Drape no longer carries retailer data: it recommends
+ * Region support. FitCast no longer carries retailer data: it recommends
  * garment *types* and links out to a neutral, region-aware shopping search
  * where the shopper finds the actual item on whichever store they like,
  * then pastes that product link back to try it on.
