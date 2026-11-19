@@ -1,9 +1,20 @@
 import NextAuth from "next-auth";
+import type { NextFetchEvent, NextRequest } from "next/server";
 import { authConfig } from "@/auth.config";
 
 // Edge-safe: uses only the JWT-based session check (authorized() callback),
-// never touches the SQLite user store directly.
-export default NextAuth(authConfig).auth;
+// never touches the user store directly.
+const authGate = NextAuth(authConfig).auth;
+
+export default async function proxy(req: NextRequest, event: NextFetchEvent) {
+  // `auth` has many overloads; as middleware it takes (request, event) and returns a response.
+  const res = await (authGate as unknown as (r: NextRequest, e: NextFetchEvent) => Promise<Response | undefined>)(req, event);
+  // The gate only needs to READ the session. By default it re-issues the login cookie on every
+  // request, which could land after a sign-out and undo it (see the session route). Strip those
+  // writes; signing in is the only thing that sets the cookie.
+  res?.headers.delete("set-cookie");
+  return res;
+}
 
 export const config = {
   // Skip the sign-in gate for Next's own assets and for static image files in

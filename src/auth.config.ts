@@ -8,6 +8,10 @@ import { AUTH_DISABLED } from "@/lib/auth-mode";
  * only runs in the Node.js runtime (route handlers).
  */
 export const authConfig = {
+  // Testing aid: force the stricter "__Secure-" cookies the real HTTPS site uses, even
+  // when testing a production build on http://localhost (Chrome accepts them there).
+  // Unset in production, where it has no effect.
+  useSecureCookies: process.env.AUTH_FORCE_SECURE_COOKIES === "true" ? true : undefined,
   pages: {
     signIn: "/sign-in",
   },
@@ -16,6 +20,10 @@ export const authConfig = {
       if (AUTH_DISABLED) return true; // local testing only; never true in production
       const isLoggedIn = !!auth?.user;
       const path = request.nextUrl.pathname;
+      // Already signed in? The sign-in / sign-up pages have nothing to offer — go home.
+      if (isLoggedIn && (path.startsWith("/sign-in") || path.startsWith("/sign-up"))) {
+        return Response.redirect(new URL("/", request.nextUrl));
+      }
       const isPublicRoute =
         path.startsWith("/sign-in") ||
         path.startsWith("/sign-up") ||

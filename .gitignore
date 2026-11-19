@@ -41,3 +41,6 @@ yarn-error.log*
 next-env.d.ts
 data/
 *.db
+
+# local test user store (see src/lib/local-users.ts)
+/.data/

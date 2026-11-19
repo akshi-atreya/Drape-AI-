@@ -59,6 +59,9 @@ export function Nav() {
               Sign out
             </button>
           </div>
+        ) : status === "loading" ? (
+          // Don't flash "Sign In" at a signed-in shopper while their session loads.
+          <span aria-hidden className="inline-block w-24 h-5" />
         ) : (
           <Link href="/sign-in" className="text-sm text-gray hover:text-charcoal transition-colors">
             Sign In

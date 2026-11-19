@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { ensureSchema, sql } from "@/lib/db";
+import { localCount, localFindByEmail, localInsert, localStoreEnabled } from "@/lib/local-users";
 
 export interface User {
   id: string;
@@ -31,6 +32,10 @@ function fromRow(row: UserRow): User {
 }
 
 export async function getUserByEmail(email: string): Promise<User | undefined> {
+  if (localStoreEnabled()) {
+    const row = await localFindByEmail(email.trim().toLowerCase());
+    return row ? fromRow(row) : undefined;
+  }
   await ensureSchema();
   const { rows } = await sql<UserRow>`
     SELECT * FROM users WHERE email = ${email.trim().toLowerCase()}
@@ -39,10 +44,15 @@ export async function getUserByEmail(email: string): Promise<User | undefined> {
 }
 
 export async function createUser(input: { email: string; password: string; name?: string | null }): Promise<PublicUser> {
-  await ensureSchema();
+  if (!localStoreEnabled()) await ensureSchema();
   const email = input.email.trim().toLowerCase();
   const id = randomUUID();
   const hashedPassword = bcrypt.hashSync(input.password, SALT_ROUNDS);
+
+  if (localStoreEnabled()) {
+    await localInsert({ id, email, name: input.name ?? null, hashed_password: hashedPassword, created_at: new Date().toISOString() });
+    return { id, email, name: input.name ?? null };
+  }
 
   await sql`
     INSERT INTO users (id, email, name, hashed_password)
@@ -57,6 +67,7 @@ export function verifyPassword(user: User, password: string): boolean {
 }
 
 export async function countUsers(): Promise<number> {
+  if (localStoreEnabled()) return localCount();
   await ensureSchema();
   const { rows } = await sql<{ count: string }>`SELECT COUNT(*) as count FROM users`;
   return Number(rows[0]?.count ?? 0);

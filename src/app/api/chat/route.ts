@@ -140,6 +140,17 @@ function cleanWeather(w: unknown): WeatherContext | null {
   };
 }
 
+/**
+ * True only when the reply is actually asking "menswear or womenswear?" — it names both
+ * and asks a question. A reply like "Got it, womenswear it is! Where are you headed?"
+ * mentions one and must NOT bring the gender buttons back.
+ */
+function asksMenswearOrWomenswear(message: string): boolean {
+  const men = /\b(menswear|men'?s)\b/i.test(message);
+  const women = /\b(womenswear|women'?s)\b/i.test(message);
+  return men && women && message.includes("?");
+}
+
 export async function POST(req: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -177,6 +188,9 @@ export async function POST(req: NextRequest) {
     photoIds: [],
   };
 
+  if (!Array.isArray(body.messages) || body.messages.length === 0) {
+    return NextResponse.json({ error: "Say something to your stylist first." }, { status: 400 });
+  }
   const built = buildConversation(Array.isArray(body.messages) ? body.messages : []);
   const conversation = built.conversation;
   ctx.photoIds = built.photoIds;
@@ -297,10 +311,20 @@ export async function POST(req: NextRequest) {
   if (
     quickReplies.length === 0 &&
     outfits.length === 0 &&
-    /menswear|womenswear|men'?s|women'?s/i.test(finalMessage)
+    asksMenswearOrWomenswear(finalMessage)
   ) {
     quickReplies = ["Womenswear", "Menswear", "No preference"];
   }
+  // Same for an occasion question: never leave the shopper typing an answer to "date night or casual?".
+  if (
+    quickReplies.length === 0 &&
+    outfits.length === 0 &&
+    finalMessage.includes("?") &&
+    /\boccasion\b|date night or|what are you dressing for|what('s| is) the (event|plan)/i.test(finalMessage)
+  ) {
+    quickReplies = ["Date night", "Casual day out", "Work", "Party"];
+  }
+
   // Same guarantee for the weather question: always offer tappable answers.
   if (
     quickReplies.length === 0 &&

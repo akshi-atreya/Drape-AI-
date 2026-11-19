@@ -43,6 +43,22 @@ cp .env.local.example .env.local   # then fill in the keys
 npx next dev --webpack
 ```
 
+### Testing locally (with real sign-up and sign-in, no database needed)
+
+With no Postgres URL set, a dev server keeps accounts in a throwaway file
+(`.data/dev-users.json`, gitignored) so you can sign up, sign in and sign out
+exactly like production. It is never used on Vercel.
+
+```bash
+npx next dev --webpack                                   # normal dev server
+# To test a PRODUCTION build locally the way Vercel runs it:
+npx next build
+AUTH_FORCE_SECURE_COOKIES=true LOCAL_USER_STORE=true AUTH_TRUST_HOST=true npx next start -p 3100
+```
+
+`NEXT_PUBLIC_DISABLE_AUTH=true` (dev only) skips sign-in entirely if you want to
+poke at the UI without an account.
+
 | Variable | Used for |
 | --- | --- |
 | `ANTHROPIC_API_KEY` | Stylist chat and trend extraction |
@@ -51,6 +67,7 @@ npx next dev --webpack
 | `POSTGRES_URL` | User accounts (Neon / Vercel Postgres) |
 | `CRON_SECRET` | Authorizes the daily trend warm-up cron |
 | `NEXT_PUBLIC_DISABLE_AUTH=true` | Local testing only: skip sign-in (ignored in production) |
+| `LOCAL_USER_STORE=true`, `AUTH_FORCE_SECURE_COOKIES=true`, `AUTH_TRUST_HOST=true` | Local testing of a production build only (see above) |
 
 ## Deploying to Vercel
 

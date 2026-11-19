@@ -34,10 +34,29 @@ const OCCASION_TARGET_FORMALITY: Record<OccasionTag, number> = {
 const FORMALITY_MATCH_THRESHOLD = 1.4;
 
 /** Case-insensitive match against the canonical OccasionTag list; free text the LLM passes that isn't one of these (e.g. "brunch") returns null. */
+/**
+ * Free-text occasions the stylist might pass ("night out", "office", "brunch"...) mapped onto the
+ * engine's eight occasions. Without this anything but an exact name skipped the dressiness logic,
+ * so a "night out" could come back as a denim jacket and sneakers. Order matters: more specific
+ * and dressier words are checked first.
+ */
+const OCCASION_SYNONYMS: [RegExp, OccasionTag][] = [
+  [/wedding|engagement|gala|black.?tie|formal|ceremony|prom/, "Wedding Guest"],
+  [/date|anniversary|romantic|valentine/, "Date Night"],
+  [/night out|party|club|drinks|cocktail|birthday|new year|nye|celebrat|going out|evening|dinner|concert|nightlife/, "Party"],
+  [/work|office|interview|business|meeting|conference|presentation|professional|corporate/, "Work"],
+  [/vacation|holiday|trip|getaway|sightseeing|resort|beach|honeymoon|city break/, "Vacation"],
+  [/travel|airport|flight|commute|road trip/, "Travel"],
+  [/weekend|brunch|errand|coffee|lunch|casual|park|shopping|relaxed|hang ?out|friends/, "Weekend"],
+  [/everyday|daily|day-to-day|basic/, "Everyday"],
+];
+
 function resolveOccasionTag(occasion: string | null): OccasionTag | null {
   if (!occasion) return null;
   const needle = occasion.trim().toLowerCase();
-  return OCCASION_TAGS.find((t) => t.toLowerCase() === needle) ?? null;
+  const exact = OCCASION_TAGS.find((t) => t.toLowerCase() === needle);
+  if (exact) return exact;
+  return OCCASION_SYNONYMS.find(([re]) => re.test(needle))?.[1] ?? null;
 }
 
 /**
@@ -393,8 +412,9 @@ function optimizeToBudget(catalog: Product[], items: OutfitItem[], req: OutfitRe
 
 function outfitName(occasion: string | null, locationHint: string | null, index: number): string {
   const vibe = occasion ?? "Everyday";
-  if (locationHint) return `${locationHint} ${vibe}`;
-  return index === 0 ? vibe : `${vibe} — Option ${index + 1}`;
+  const base = locationHint ? `${locationHint} ${vibe}` : vibe;
+  // Every card needs its own title, with or without a destination.
+  return index === 0 ? base : `${base} — Option ${index + 1}`;
 }
 
 export function outfitTotal(items: OutfitItem[]): number {
