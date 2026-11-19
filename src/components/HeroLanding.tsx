@@ -23,7 +23,7 @@ export function HeroLanding() {
       </div>
 
       <div className="animate-in w-full" style={{ animationDelay: "80ms" }}>
-        <ChatComposer variant="hero" onSubmit={sendMessage} loading={loading} />
+        <ChatComposer variant="hero" onSubmit={(text, images) => sendMessage(text, undefined, images)} loading={loading} />
       </div>
 
       <p className="animate-in text-xs text-gray mt-3 max-w-sm mx-auto" style={{ animationDelay: "120ms" }}>

@@ -94,6 +94,11 @@ const COMFORT_C_BY_SUBCATEGORY: Record<string, [number, number]> = {
   Blazer: [6, 28],
 };
 
+/** Temperature range for a piece type, if it has one (also used for pieces the shopper owns). */
+export function comfortRangeFor(subcategory: string): [number, number] | undefined {
+  return COMFORT_C_BY_SUBCATEGORY[subcategory];
+}
+
 export const catalog: Product[] = (raw as Product[]).map((p) => ({
   ...p,
   seasonTags: SEASONS_BY_SUBCATEGORY[p.subcategory] ?? ["All Season"],

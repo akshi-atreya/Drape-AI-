@@ -1,4 +1,5 @@
 import { Product } from "@/lib/types";
+import { isOwnedProduct } from "@/lib/owned-items";
 
 /**
  * FitCast AI recommends garment *types* — "a charcoal satin blouse, cropped
@@ -18,6 +19,7 @@ export function pieceTitle(product: Product): string {
 
 /** e.g. "regular fit · straight". The material field in the mock catalog is not reliable, so it is never shown or sent. */
 export function pieceDetail(product: Product): string {
+  if (isOwnedProduct(product)) return "You already own this";
   return `${fitLabel(product.fit)} · ${product.silhouette}`;
 }
 
@@ -28,5 +30,6 @@ export function pieceSearchQuery(product: Product): string {
 
 /** Plain-language description handed to the try-on model when there is no photo. */
 export function pieceDescription(product: Product): string {
+  if (isOwnedProduct(product)) return product.name.toLowerCase();
   return `${product.primaryColor} ${product.subcategory.toLowerCase()} (${fitLabel(product.fit)}, ${product.silhouette} silhouette)`;
 }

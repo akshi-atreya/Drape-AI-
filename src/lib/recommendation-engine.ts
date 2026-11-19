@@ -50,6 +50,12 @@ function resolveOccasionTag(occasion: string | null): OccasionTag | null {
  * budget-safe, and reproducible.
  */
 
+/** A piece the shopper already owns; every outfit is built around it. */
+export interface OwnedItem {
+  product: Product;
+  role: Category;
+}
+
 export interface OutfitRequest {
   /** Who to shop for. Null means unknown — callers should ask before generating outfits. */
   gender: Gender | null;
@@ -68,6 +74,8 @@ export interface OutfitRequest {
   /** Expected temperature (°C) the outfit will be worn in; null = unknown (fall back to season only). */
   temperatureC: number | null;
   ownedItemNames: string[];
+  /** Pieces to lock into every outfit (the rest is chosen to go with them). */
+  ownedItems: OwnedItem[];
   count: number;
   /** Trends extracted from current fashion publications; null = fall back to the catalog's built-in trend scores. */
   liveTrends: Trend[] | null;
@@ -88,6 +96,7 @@ export const defaultOutfitRequest: OutfitRequest = {
   season: null,
   temperatureC: null,
   ownedItemNames: [],
+  ownedItems: [],
   count: 3,
   liveTrends: null,
 };
@@ -171,6 +180,21 @@ export interface ScoredProduct {
   };
 }
 
+/** How well a candidate colour sits next to a colour the shopper already owns (0–1). */
+function pairColor(candidate: string, anchor: string): number {
+  const c = candidate.toLowerCase();
+  const a = anchor.toLowerCase();
+  if (c === a) return 0.5;
+  const quiet = NEUTRAL_COLORS.has(a) || a === "navy" || a === "brown";
+  if (!quiet) {
+    // The owned piece is the statement (gold, red, ...): let it lead with quiet partners.
+    const partners: Record<string, number> = { black: 1, white: 0.95, cream: 0.9, ivory: 0.9, charcoal: 0.85, navy: 0.8, beige: 0.7, camel: 0.7, brown: 0.65 };
+    return partners[c] ?? 0.3;
+  }
+  // A neutral owned piece goes with almost anything; a touch of colour is welcome.
+  return NEUTRAL_COLORS.has(c) ? 0.7 : 0.75;
+}
+
 export function scoreProduct(product: Product, req: OutfitRequest): ScoredProduct {
   // Style compatibility: overlap between requested style tags and the
   // product's tags. Neutral (0.55) when the user hasn't specified a style.
@@ -190,6 +214,11 @@ export function scoreProduct(product: Product, req: OutfitRequest): ScoredProduc
     color = 1;
   } else if (NEUTRAL_COLORS.has(product.primaryColor)) {
     color = 0.6;
+  }
+  // Building around something the shopper owns: how it pairs matters most.
+  if (req.ownedItems.length && color > 0.05) {
+    const pair = Math.min(...req.ownedItems.map((o) => pairColor(product.primaryColor, o.product.primaryColor)));
+    color = color * 0.35 + pair * 0.65;
   }
 
   // Occasion fit: primarily driven by how close the product's formality is
@@ -302,12 +331,23 @@ function buildOneOutfit(
   const budget = req.budget;
 
   for (const role of recipe.roles) {
+    const owned = req.ownedItems.find((o) => o.role === role);
+    if (owned) {
+      items.push({ product: owned.product, role, owned: true });
+      chosenIds.add(owned.product.id);
+      continue;
+    }
     const share = recipe.shares[role] ?? 1 / recipe.roles.length;
     const maxPrice = budget != null ? budget * share * 1.3 : undefined;
     const best = pickBestForCategory(catalog, role, req, { maxPrice, excludeIds: chosenIds });
     if (!best) continue; // role unavailable in filtered catalog; skip gracefully
     items.push({ product: best.product, role });
     chosenIds.add(best.product.id);
+  }
+
+  // An owned piece whose role isn't in this recipe still has to appear.
+  for (const o of req.ownedItems) {
+    if (!items.some((it) => it.role === o.role)) items.push({ product: o.product, role: o.role, owned: true });
   }
 
   return items.length >= 2 ? items : null;
@@ -390,8 +430,16 @@ export function generateOutfits(catalog: Product[], req: OutfitRequest): Outfit[
   const hot = req.temperatureC != null && req.temperatureC >= 24;
   const preferLight = hot || (!cold && formalityTarget != null && formalityTarget <= 0.6);
 
-  const outerwearRecipes = availableRecipes.filter((r) => r.roles.includes("Jackets"));
-  const orderedRecipes = [...(cold && outerwearRecipes.length ? outerwearRecipes : availableRecipes)].sort((a, b) => {
+  // Around something the shopper owns, only use recipes that have a slot for it.
+  const ownedRoles = req.ownedItems.map((o) => o.role);
+  let recipePool = availableRecipes;
+  if (ownedRoles.length) {
+    const strict = recipePool.filter((r) => ownedRoles.every((x) => r.roles.includes(x)));
+    const loose = recipePool.filter((r) => ownedRoles.some((x) => r.roles.includes(x)));
+    recipePool = strict.length ? strict : loose.length ? loose : recipePool;
+  }
+  const outerwearRecipes = recipePool.filter((r) => r.roles.includes("Jackets"));
+  const orderedRecipes = [...(cold && outerwearRecipes.length ? outerwearRecipes : recipePool)].sort((a, b) => {
     const priority = (r: Recipe) => {
       const hasDress = r.roles.includes("Dresses");
       const hasJacket = r.roles.includes("Jackets");
@@ -470,13 +518,15 @@ export function remixOutfit(
   const filtered = filterCatalog(catalog, req);
   const currentIds = new Set(outfit.items.map((it) => it.product.id));
 
-  const rolesToChange =
+  const ownedRoles = outfit.items.filter((it) => it.owned).map((it) => it.role);
+  const rolesToChange = (
     instruction.targetRoles.length > 0
       ? instruction.targetRoles
-      : outfit.items.map((it) => it.role).filter((r) => !instruction.lockRoles.includes(r));
+      : outfit.items.map((it) => it.role).filter((r) => !instruction.lockRoles.includes(r))
+  ).filter((r) => !ownedRoles.includes(r)); // never swap out something the shopper owns
 
   const newItems: OutfitItem[] = outfit.items.map((it) => {
-    if (instruction.lockRoles.includes(it.role)) return it;
+    if (it.owned || instruction.lockRoles.includes(it.role)) return it;
     if (!rolesToChange.includes(it.role)) return it;
 
     const roleTotal = outfit.totalPrice;

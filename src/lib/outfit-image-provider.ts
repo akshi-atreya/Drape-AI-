@@ -12,6 +12,8 @@ const MODEL = "gemini-3.1-flash-image";
 export interface OutfitImageRequest {
   /** e.g. "charcoal blouse (cropped fit, flowy silhouette)" */
   pieces: string[];
+  /** Optional photo (data URL) per piece, aligned with `pieces`: garments the shopper owns. */
+  photos?: (string | null)[];
   gender: "Women" | "Men" | "Unisex" | null;
   occasion: string;
 }
@@ -25,7 +27,16 @@ export async function generateOutfitImage(
   if (!apiKey) return { error: "Look images aren't set up on the server.", reason: "other" };
 
   const audience = req.gender === "Men" ? "menswear" : req.gender === "Women" ? "womenswear" : "unisex";
-  const list = req.pieces.map((p) => `- ${p}`).join("\n");
+  // Garments the shopper owns are passed as reference images, so the look shows their actual piece.
+  const refs: { mimeType: string; data: string }[] = [];
+  const list = req.pieces
+    .map((p, i) => {
+      const m = /^data:(image\/[a-z+.-]+);base64,(.+)$/i.exec(req.photos?.[i] ?? "");
+      if (!m) return `- ${p}`;
+      refs.push({ mimeType: m[1], data: m[2] });
+      return `- ${p} — this is the person's own garment, shown in reference image ${refs.length}. Reproduce that exact garment (same color, fabric, shape and details); do not restyle it.`;
+    })
+    .join("\n");
 
   const prompt = `Create a single clean, editorial flat-lay photograph of one complete ${audience} outfit for "${req.occasion}", laid out neatly on a warm ivory (#f4efe6) background, shot from directly above in soft natural light.
 
@@ -43,7 +54,7 @@ Rules:
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: MODEL,
-      contents: [{ text: prompt }],
+      contents: [...refs.map((r) => ({ inlineData: { mimeType: r.mimeType, data: r.data } })), { text: prompt }],
       config: { responseModalities: ["TEXT", "IMAGE"], imageConfig: { aspectRatio: "1:1" } },
     });
     const parts = response.candidates?.[0]?.content?.parts ?? [];

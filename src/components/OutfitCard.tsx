@@ -30,6 +30,7 @@ export function OutfitCard({
   const loading = useAppStore((s) => s.loading);
   const countryCode = useAppStore((s) => s.countryCode);
   const profileGender = useAppStore((s) => s.profile.gender);
+  const photos = useAppStore((s) => s.photos);
   const [remixOpen, setRemixOpen] = useState(false);
   const [remixText, setRemixText] = useState("");
   const [justSaved, setJustSaved] = useState(false);
@@ -64,26 +65,39 @@ export function OutfitCard({
 
         <div className="space-y-1">
           <p className="text-xs uppercase tracking-wide text-gray">The pieces</p>
-          <p className="text-xs text-gray">Tap &ldquo;Find it&rdquo; to shop a piece, or see the whole look on you.</p>
+          <p className="text-xs text-gray">
+            {items.some((it) => it.owned)
+              ? "Built around what you already own. Tap “Find it” for the rest, or see the whole look on you."
+              : "Tap “Find it” to shop a piece, or see the whole look on you."}
+          </p>
         </div>
 
         <ul className="divide-y divide-beige-dark/60 -mx-1 -mt-2">
           {items.map((it) => (
             <li key={it.product.id} className="py-2.5 px-1">
               <div className="flex items-center gap-3">
-                <PieceThumb product={it.product} compact className="w-11 h-11 rounded-md shrink-0" />
+                <PieceThumb
+                  product={it.product}
+                  photo={it.owned ? photos[it.product.id.replace(/^owned-/, "")] : undefined}
+                  compact
+                  className="w-11 h-11 rounded-md shrink-0"
+                />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-charcoal truncate">{pieceTitle(it.product)}</p>
                   <p className="text-xs text-gray truncate">{pieceDetail(it.product)}</p>
                 </div>
-                <a
-                  href={getShoppingSearchUrl(pieceSearchQuery(it.product), profileGender, countryCode)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 text-xs text-accent hover:underline"
-                >
-                  Find it ↗
-                </a>
+                {it.owned ? (
+                  <span className="shrink-0 text-xs text-charcoal-soft">✓ Yours</span>
+                ) : (
+                  <a
+                    href={getShoppingSearchUrl(pieceSearchQuery(it.product), profileGender, countryCode)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 text-xs text-accent hover:underline"
+                  >
+                    Find it ↗
+                  </a>
+                )}
               </div>
             </li>
           ))}

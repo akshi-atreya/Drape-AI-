@@ -21,6 +21,11 @@ the look, and then shows the whole outfit on you with virtual try-on.
   used to boost matching pieces. Cached 12h; a daily Vercel Cron
   (`/api/cron/trends`, protected by `CRON_SECRET`) keeps it warm. Only headline,
   publisher snippet and link are used — never article text.
+- **Style what you own**: attach a photo of a garment in the chat. Claude (vision)
+  identifies it, can ask what else you own (tappable answers), and every look
+  is built around it — owned pieces are locked in, the rest are chosen to
+  complement its color. The look image and try-on use your actual garment
+  photo. Photos are only used to read the item and aren't stored on the server.
 - **Weather** (`/api/weather`): the browser shares location (never stored) →
   Open-Meteo forecast → temperature drives which pieces make sense (each piece
   type has a comfort range; coats are required in the cold). If location is

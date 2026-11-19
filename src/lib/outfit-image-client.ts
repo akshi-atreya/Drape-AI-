@@ -22,7 +22,11 @@ async function withSlot<T>(task: () => Promise<T>): Promise<T> {
 }
 
 /** Resolves to a compressed JPEG data URL of the outfit, or rejects. */
-export function requestOutfitImage(outfit: Outfit, gender: "Women" | "Men" | "Unisex" | null): Promise<string> {
+export function requestOutfitImage(
+  outfit: Outfit,
+  gender: "Women" | "Men" | "Unisex" | null,
+  photoFor?: (productId: string) => string | undefined
+): Promise<string> {
   const existing = inFlight.get(outfit.id);
   if (existing) return existing;
 
@@ -32,6 +36,7 @@ export function requestOutfitImage(outfit: Outfit, gender: "Women" | "Men" | "Un
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         pieces: outfit.items.map((it) => pieceDescription(it.product)),
+        photos: outfit.items.map((it) => (it.owned ? photoFor?.(it.product.id) ?? null : null)),
         gender,
         occasion: outfit.occasion,
       }),

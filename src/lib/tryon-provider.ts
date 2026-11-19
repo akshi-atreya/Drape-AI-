@@ -24,6 +24,8 @@ export interface TryOnSubject {
 export interface TryOnPiece {
   /** What the piece is, e.g. "charcoal blouse (cropped fit, flowy silhouette)". */
   description: string;
+  /** Photo of the actual garment, when it's one the shopper owns. */
+  imageDataUrl?: string;
 }
 
 function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | null {
@@ -50,7 +52,14 @@ export async function generateTryOnImage(
     return { error: "That photo couldn't be read. Please try a different image." };
   }
 
-  const lines = pieces.map((p) => `- ${p.description}`);
+  // Owned garments come with a photo: pass it so the model dresses them in that exact piece.
+  const garmentImages: { mimeType: string; data: string }[] = [];
+  const lines = pieces.map((p) => {
+    const parsed = p.imageDataUrl ? parseDataUrl(p.imageDataUrl) : null;
+    if (!parsed) return `- ${p.description}`;
+    garmentImages.push(parsed);
+    return `- ${p.description} — the person's own garment, shown in image ${garmentImages.length + 1}: put exactly that garment on them (same color, fabric, shape and details).`;
+  });
 
   const subjectLines: string[] = [];
   if (subject.gender) subjectLines.push(subject.gender === "Women" ? "- The person is a woman." : "- The person is a man.");
@@ -83,6 +92,7 @@ Requirements:
       model: MODEL,
       contents: [
         { inlineData: { mimeType: photo.mimeType, data: photo.data } },
+        ...garmentImages.map((g) => ({ inlineData: { mimeType: g.mimeType, data: g.data } })),
         { text: prompt },
       ],
       config: {

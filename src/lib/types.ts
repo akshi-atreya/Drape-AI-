@@ -174,6 +174,8 @@ export const emptyTryOnPrefs: TryOnPrefs = { gender: null, build: null, height: 
 export interface OutfitItem {
   product: Product;
   role: Category;
+  /** A piece the shopper already owns (shown with their photo; never swapped by remix). */
+  owned?: boolean;
 }
 
 export interface Outfit {
@@ -210,15 +212,25 @@ export interface SavedLook {
   outfit?: Outfit;
   /** The illustrative image generated for this outfit (JPEG data URL). */
   image?: string;
+  /** Photos of garments the shopper owns in this outfit, keyed by product id. */
+  ownedPhotos?: Record<string, string>;
   product?: Product;
   trendName?: string;
   savedAt: string;
+}
+
+/** A photo the shopper attached to a message (a garment they own). */
+export interface ChatImage {
+  id: string;
+  /** Compressed JPEG data URL. */
+  dataUrl: string;
 }
 
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  images?: ChatImage[];
   outfits?: Outfit[];
   /** Tap-to-reply options offered with a question the stylist asked. */
   quickReplies?: string[];

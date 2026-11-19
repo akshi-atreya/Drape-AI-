@@ -34,6 +34,14 @@ export function ChatMessageBubble({
 
   return (
     <div className={`animate-in flex flex-col ${isUser ? "items-end" : "items-start"}`}>
+      {isUser && message.images && message.images.length > 0 && (
+        <div className="flex gap-2 mb-1.5 justify-end flex-wrap max-w-[85%] md:max-w-[70%]">
+          {message.images.map((img) => (
+            // eslint-disable-next-line @next/next/no-img-element -- the shopper's own photo, a data: URL
+            <img key={img.id} src={img.dataUrl} alt="Photo you shared" className="w-32 h-32 md:w-40 md:h-40 rounded-xl object-cover border border-beige-dark/60" />
+          ))}
+        </div>
+      )}
       <div
         className={`max-w-[85%] md:max-w-[70%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed ${
           isUser ? "bg-charcoal text-ivory rounded-br-md" : "bg-white border border-beige-dark/60 rounded-bl-md"

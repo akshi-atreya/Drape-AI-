@@ -34,6 +34,7 @@ export function TryOnModal({
   const prefs = useAppStore((s) => s.tryOnPrefs);
   const setTryOnPrefs = useAppStore((s) => s.setTryOnPrefs);
   const profileGender = useAppStore((s) => s.profile.gender);
+  const photos = useAppStore((s) => s.photos);
 
   const idx = outfits.findIndex((o) => o.id === outfit.id);
   const hasPrev = idx > 0;
@@ -123,6 +124,7 @@ export function TryOnModal({
           photoDataUrl: photoData,
           pieces: targetOutfit.items.map((it) => ({
             description: pieceDescription(it.product),
+            imageDataUrl: it.owned ? photos[it.product.id.replace(/^owned-/, "")] : undefined,
           })),
         }),
       });
@@ -308,7 +310,7 @@ export function TryOnModal({
 
                 <div className="flex justify-center gap-2">
                   {outfit.items.map((it) => (
-                    <PieceThumb key={it.product.id} product={it.product} className="w-12 h-12 rounded-lg" compact />
+                    <PieceThumb key={it.product.id} product={it.product} photo={it.owned ? photos[it.product.id.replace(/^owned-/, "")] : undefined} className="w-12 h-12 rounded-lg" compact />
                   ))}
                 </div>
 

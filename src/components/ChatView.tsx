@@ -81,7 +81,7 @@ export function ChatView() {
       </div>
 
       <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] md:bottom-0 bg-gradient-to-t from-ivory via-ivory to-transparent pt-6 pb-6 px-6 md:px-0">
-        <ChatComposer variant="bar" onSubmit={sendMessage} loading={loading} />
+        <ChatComposer variant="bar" onSubmit={(text, images) => sendMessage(text, undefined, images)} loading={loading} />
       </div>
 
       {tryOnOutfit && (

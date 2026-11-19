@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { v4 as uuid } from "uuid";
 import {
+  ChatImage,
   ChatMessage,
   emptyStyleProfile,
   emptyTryOnPrefs,
@@ -36,6 +37,8 @@ interface AppState {
   weather: WeatherContext | null;
   /** Whether we've asked for, got, or been refused the shopper's location this session. */
   locationStatus: "unknown" | "granted" | "denied" | "unavailable";
+  /** Photos the shopper has attached (garments they own), by photo id. Kept in memory only. */
+  photos: Record<string, string>;
   /** The generated hero image for each outfit on screen, keyed by outfit id. */
   outfitImages: Record<string, string>;
   /** Optional try-on hints (gender / build / height). Kept in the browser only. */
@@ -44,10 +47,10 @@ interface AppState {
   error: string | null;
 
   startChat: () => void;
-  sendMessage: (text: string, targetOutfitId?: string) => Promise<void>;
+  sendMessage: (text: string, targetOutfitId?: string, images?: ChatImage[]) => Promise<void>;
   remix: (outfitId: string, instruction: string) => Promise<void>;
   updateProfile: (patch: Partial<StyleProfile>) => void;
-  reviveOutfit: (outfit: Outfit, image?: string) => void;
+  reviveOutfit: (outfit: Outfit, image?: string, ownedPhotos?: Record<string, string>) => void;
   detectCountry: () => void;
   setCountryCode: (country: CountryCode) => void;
   setTryOnPrefs: (patch: Partial<TryOnPrefs>) => void;
@@ -67,19 +70,21 @@ async function callChatApi(
   countryCode: CountryCode,
   targetOutfitId?: string,
   weather?: WeatherContext | null,
-  locationDenied?: boolean
+  locationDenied?: boolean,
+  wardrobe?: { name: string; category: string; color: string }[]
 ): Promise<{ reply: string; quickReplies?: string[]; profile: StyleProfile; outfits: ChatApiOutfitResult[] }> {
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      messages: messages.map((m) => ({ role: m.role, content: m.content, images: m.images })),
       profile,
       currentOutfits,
       countryCode,
       targetOutfitId,
       weather,
       locationDenied,
+      wardrobe,
     }),
   });
   const data = await res.json();
@@ -100,6 +105,7 @@ export const useAppStore = create<AppState>()(
       countryCode: "US",
       countryCodeManuallySet: false,
       outfitImages: {},
+      photos: {},
       weather: null,
       locationStatus: "unknown",
       tryOnPrefs: emptyTryOnPrefs,
@@ -108,16 +114,18 @@ export const useAppStore = create<AppState>()(
 
       startChat: () => set({ chatStarted: true }),
 
-      sendMessage: async (text: string, targetOutfitId?: string) => {
+      sendMessage: async (text: string, targetOutfitId?: string, images?: ChatImage[]) => {
         const userMsg: ChatMessage = {
           id: uuid(),
           role: "user",
           content: text,
+          images: images?.length ? images : undefined,
           createdAt: new Date().toISOString(),
         };
         set((s) => ({
           chatStarted: true,
           messages: [...s.messages, userMsg],
+          photos: images?.length ? { ...s.photos, ...Object.fromEntries(images.map((i) => [i.id, i.dataUrl])) } : s.photos,
           loading: true,
           error: null,
         }));
@@ -158,7 +166,8 @@ export const useAppStore = create<AppState>()(
             countryCode,
             targetOutfitId,
             get().weather,
-            get().locationStatus === "denied" || get().locationStatus === "unavailable"
+            get().locationStatus === "denied" || get().locationStatus === "unavailable",
+            get().wardrobe.map((w) => ({ name: w.name, category: w.category, color: w.color }))
           );
 
           const nextOutfitsById = { ...get().outfitsById };
@@ -265,9 +274,12 @@ export const useAppStore = create<AppState>()(
 
       setOutfitImage: (outfitId, image) => set((s) => ({ outfitImages: { ...s.outfitImages, [outfitId]: image } })),
 
-      reviveOutfit: (outfit, image) =>
+      reviveOutfit: (outfit, image, ownedPhotos) =>
         set((s) => ({
           chatStarted: true,
+          photos: ownedPhotos
+            ? { ...s.photos, ...Object.fromEntries(Object.entries(ownedPhotos).map(([productId, url]) => [productId.replace(/^owned-/, ""), url])) }
+            : s.photos,
           outfitImages: image ? { ...s.outfitImages, [outfit.id]: image } : s.outfitImages,
           outfitsById: { ...s.outfitsById, [outfit.id]: outfit },
           outfitOrder: s.outfitOrder.includes(outfit.id) ? s.outfitOrder : [...s.outfitOrder, outfit.id],
@@ -300,6 +312,15 @@ export const useAppStore = create<AppState>()(
             {
               ...look,
               image: look.image ?? (look.type === "outfit" && look.outfit ? s.outfitImages[look.outfit.id] : undefined),
+              // Keep the shopper's photos of garments they own so the saved look still shows them.
+              ownedPhotos:
+                look.type === "outfit" && look.outfit
+                  ? Object.fromEntries(
+                      look.outfit.items
+                        .filter((it) => it.owned && s.photos[it.product.id.replace(/^owned-/, "")])
+                        .map((it) => [it.product.id, s.photos[it.product.id.replace(/^owned-/, "")]])
+                    )
+                  : undefined,
               id: uuid(),
               savedAt: new Date().toISOString(),
             },
@@ -311,7 +332,7 @@ export const useAppStore = create<AppState>()(
         set((s) => ({ savedLooks: s.savedLooks.filter((l) => l.id !== id) })),
 
       resetChat: () =>
-        set({ chatStarted: false, messages: [], outfitOrder: [], outfitsById: {}, outfitImages: {} }),
+        set({ chatStarted: false, messages: [], outfitOrder: [], outfitsById: {}, outfitImages: {}, photos: {} }),
     }),
     {
       name: "ai-fashion-shopper-store",

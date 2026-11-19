@@ -21,6 +21,8 @@ import { profileToOutfitRequest, mergeProfile } from "@/lib/style-profile";
 import { catalog } from "@/lib/catalog";
 import { CountryCode } from "@/lib/locale";
 import { seasonFromTemp, WeatherContext } from "@/lib/weather";
+import { makeOwnedProduct } from "@/lib/owned-items";
+import { FORMALITY_LEVELS } from "@/lib/types";
 
 /**
  * Tool surface exposed to the LLM. The model handles conversation, intent
@@ -62,6 +64,26 @@ export const toolDefinitions: Anthropic.Tool[] = [
           type: ["number", "null"],
           description:
             "Approximate temperature in °C the outfit will be worn in. Use the shopper's current/weekend weather from your context, or the weather they tell you about (Hot ≈ 32, Warm ≈ 25, Mild ≈ 17, Cool ≈ 9, Cold ≈ 0), or a typical temperature for a trip destination and month. This filters out pieces that make no sense at that temperature (e.g. shorts at 10°C, wool coats at 28°C), so ALWAYS pass it when you know it.",
+        },
+        ownedItems: {
+          type: "array",
+          maxItems: 3,
+          description:
+            "Garments the shopper ALREADY OWNS that every look must be built around — read from a photo they uploaded, or items they say they have (including things in their saved wardrobe). Describe each precisely from what you can see or were told. Leave empty when they just want fresh outfit ideas.",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string", description: "Short and specific with color and material/details, e.g. 'gold satin corset top', 'black high-waisted jeans'." },
+              category: { type: "string", enum: CATEGORIES },
+              subcategory: { type: ["string", "null"], description: "One of our piece types ONLY if it clearly matches (e.g. Blouse, Straight Jeans, Midi Skirt, Blazer, Ankle Boots); otherwise null." },
+              color: { type: "string", description: "Main color as one plain word, e.g. gold, black, cream." },
+              material: { type: ["string", "null"] },
+              fit: { type: ["string", "null"], description: "e.g. cropped, relaxed, fitted." },
+              formality: { type: ["string", "null"], enum: [...FORMALITY_LEVELS, null] },
+              photoIndex: { type: ["integer", "null"], description: "The [Photo N] number this item was read from, if it came from a photo." },
+            },
+            required: ["name", "category", "color"],
+          },
         },
         count: { type: "integer", minimum: 1, maximum: 4, default: 3 },
         styleTagsOverride: { type: "array", items: { type: "string", enum: STYLE_TAGS } },
@@ -134,6 +156,8 @@ export interface ToolRunContext {
   liveTrends: Trend[] | null;
   /** The shopper's current weather (from their location, or what they told us). */
   weather: WeatherContext | null;
+  /** Ids of the photos in the conversation, in [Photo N] order (index N-1). */
+  photoIds: string[];
 }
 
 export function executeTool(
@@ -160,11 +184,20 @@ export function executeTool(
 
     // Weather decides what's sensible to wear, so don't guess: use what the
     // model passed, else the shopper's live weather, else make it ask.
+    // Pieces the shopper owns (from a photo, or told to us) get locked into every look.
+    const ownedByRole = new Map<string, NonNullable<ReturnType<typeof makeOwnedProduct>>>();
+    for (const raw of (Array.isArray(input.ownedItems) ? input.ownedItems : []).slice(0, 3)) {
+      const made = makeOwnedProduct((raw ?? {}) as Record<string, unknown>, gender, ctx.photoIds);
+      if (made && !ownedByRole.has(made.role)) ownedByRole.set(made.role, made);
+    }
+    const ownedItems = [...ownedByRole.values()];
+
     const inputTemp = typeof input.temperatureC === "number" ? input.temperatureC : null;
     const temperatureC = inputTemp ?? ctx.weather?.effectiveC ?? null;
     const inputSeason = (input.season as string | null) ?? null;
     const season = inputSeason ?? (temperatureC != null ? seasonFromTemp(temperatureC) : null);
-    if (temperatureC == null && !season) {
+    // Styling something they own doesn't need the weather first; ideas for "today" do.
+    if (temperatureC == null && !season && ownedItems.length === 0) {
       return {
         error:
           "Weather is unknown, so you can't pick appropriate pieces yet. Do NOT call find_outfits. Ask the shopper what the weather is like (or where/when they're going) via respond_to_user with quickReplies: [\"Hot · 30°C+ / 86°F+\", \"Warm · 22–29°C / 72–84°F\", \"Mild · 14–21°C / 57–70°F\", \"Cool · 6–13°C / 43–55°F\", \"Cold · under 6°C / 43°F\"]. Then call find_outfits with temperatureC (Hot=32, Warm=25, Mild=17, Cool=9, Cold=0).",
@@ -177,6 +210,7 @@ export function executeTool(
       locationHint: (input.locationHint as string | null) ?? null,
       season,
       temperatureC,
+      ownedItems,
       count: (input.count as number) ?? 3,
       liveTrends: ctx.liveTrends,
       styleTags: (input.styleTagsOverride as StyleTag[] | undefined) ?? undefined,
@@ -196,6 +230,7 @@ export function executeTool(
         items: o.items.map((it) => ({
           role: it.role,
           piece: it.product.name,
+          owned: it.owned === true, // the shopper already has this one
           fit: it.product.fit,
           color: it.product.primaryColor,
           // Current trends this piece expresses (from fashion publications); cite these by name.
@@ -255,6 +290,7 @@ Core rules:
 - When ready to present outfits, call find_outfits, and always pass the season if the user gave any seasonal clue (see the tool description) — don't leave a winter trip to chance.
 - When the user wants to adjust an existing outfit (swap a piece, make it more casual/feminine/warmer, keep certain pieces), call remix_outfit with the outfitId from the outfits currently on screen and the instruction close to verbatim. Never regenerate from scratch for a remix request.
 - After presenting outfits for the first time, briefly remind them (one short sentence, once) that they can tap "Try it on" to see a look on themselves.
+- Styling something they already own: if the shopper shares a photo of a garment (or says they own something) and wants to know how to wear it, first look closely and say, in a sentence, what you see (type, color, material, details). Photos arrive labeled [Photo N]. Then either ask ONE short question about what else they have that it could pair with — with quickReplies like ["Black jeans", "Black skirt", "Neither — show me options"] chosen for that piece — or, if they already asked for ideas or told you what they have, go straight to find_outfits. Pass what they own as ownedItems (use photoIndex for photos; items they simply tell you about or that are in their saved wardrobe need no photoIndex). Every look is then built around it. Afterwards, say which pieces they'd need to get (each has a "Find it" link) and which they already own.
 - Always end your turn with exactly one call to respond_to_user. Keep the message itself short (1-3 sentences) — per-outfit reasoning goes in outfitExplanations, referencing the real colors, cuts and trends from the tool results, never inventing fabrics, e.g. "The warm neutral palette keeps the look minimal while the relaxed-tailoring blazer is a current trend."
 - Your message and outfitExplanations render as chat bubbles, not a document: light markdown is fine (occasional **bold** for one or two key words), but never use headers, tables, code blocks, or long bullet lists — write it the way you'd actually say it out loud to someone.
 - Only describe pieces that were returned by find_outfits/remix_outfit.`;

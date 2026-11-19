@@ -43,7 +43,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (body.pieces.some((p) => typeof p.description !== "string" || p.description.length > 300)) {
+  const photoOk = (v: unknown) => typeof v === "string" && v.length <= 2_000_000 && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v);
+  if (
+    body.pieces.some((p) => typeof p.description !== "string" || p.description.length > 300 || (p.imageDataUrl != null && !photoOk(p.imageDataUrl))) ||
+    body.pieces.filter((p) => p.imageDataUrl).length > 3
+  ) {
     return NextResponse.json({ error: "Invalid outfit pieces." }, { status: 400 });
   }
 
@@ -56,7 +60,7 @@ export async function POST(req: NextRequest) {
 
   const result = await generateTryOnImage(
     body.photoDataUrl,
-    body.pieces.map((p) => ({ description: p.description.slice(0, 200) })),
+    body.pieces.map((p) => ({ description: p.description.slice(0, 200), imageDataUrl: p.imageDataUrl })),
     subject
   );
   if (result.error) {

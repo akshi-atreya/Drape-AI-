@@ -16,6 +16,7 @@ export function OutfitHero({ outfit, image: savedImage }: { outfit: Outfit; imag
   const storedImage = useAppStore((s) => s.outfitImages[outfit.id]);
   const setOutfitImage = useAppStore((s) => s.setOutfitImage);
   const gender = useAppStore((s) => s.profile.gender);
+  const photos = useAppStore((s) => s.photos);
   const [failed, setFailed] = useState(false);
   const [reason, setReason] = useState<string | undefined>();
   const [attempt, setAttempt] = useState(0);
@@ -25,7 +26,7 @@ export function OutfitHero({ outfit, image: savedImage }: { outfit: Outfit; imag
   useEffect(() => {
     if (image) return;
     let cancelled = false;
-    requestOutfitImage(outfit, gender)
+    requestOutfitImage(outfit, gender, (productId) => photos[productId.replace(/^owned-/, "")])
       .then((img) => !cancelled && setOutfitImage(outfit.id, img))
       .catch((err) => {
         if (cancelled) return;

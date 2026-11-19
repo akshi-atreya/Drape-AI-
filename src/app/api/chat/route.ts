@@ -14,7 +14,9 @@ const MODEL = "claude-sonnet-5";
 const MAX_TOOL_ROUNDS = 8;
 
 interface ChatRequestBody {
-  messages: { role: "user" | "assistant"; content: string }[];
+  messages: { role: "user" | "assistant"; content: string; images?: { id: string; dataUrl: string }[] }[];
+  /** Items the shopper has saved as owned (their Wardrobe page). */
+  wardrobe?: { name?: string; category?: string; color?: string }[];
   profile: StyleProfile;
   currentOutfits: Outfit[];
   targetOutfitId?: string;
@@ -44,6 +46,60 @@ function profileBlock(p: StyleProfile | undefined): string {
   if (fits.length) parts.push(`fit: ${fits.join(", ")}`);
   if (!parts.length) return "";
   return `\n\nSaved shopper profile (remembered from earlier visits): ${parts.join("; ")}. Use it and don't ask again for anything already listed. Only ask about menswear/womenswear again if the user says this look is for someone else.`;
+}
+
+/** Photos the shopper can attach: how many we keep and how big each may be. */
+const MAX_PHOTOS = 4;
+const MAX_PHOTO_CHARS = 1_600_000;
+const IMAGE_RE = /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/;
+
+/**
+ * Turns the chat history into model messages, attaching the most recent
+ * photos as images labeled [Photo N] so the stylist can refer to them (and
+ * point tools at them with photoIndex). The photos come from the browser, so
+ * type and size are re-checked here.
+ */
+function buildConversation(messages: ChatRequestBody["messages"]): { conversation: Anthropic.MessageParam[]; photoIds: string[] } {
+  type Valid = { id: string; mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif"; data: string };
+  const valid = (m: ChatRequestBody["messages"][number]): Valid[] =>
+    m.role !== "user" || !Array.isArray(m.images)
+      ? []
+      : m.images.slice(0, 3).flatMap((img) => {
+          const match = typeof img?.dataUrl === "string" && img.dataUrl.length <= MAX_PHOTO_CHARS ? IMAGE_RE.exec(img.dataUrl) : null;
+          const id = typeof img?.id === "string" ? img.id.replace(/[^A-Za-z0-9-]/g, "").slice(0, 60) : "";
+          return match && id ? [{ id, mediaType: match[1] as Valid["mediaType"], data: match[2] }] : [];
+        });
+
+  // Keep only the most recent photos overall.
+  const all = messages.flatMap(valid);
+  const keep = new Set(all.slice(-MAX_PHOTOS).map((p) => p.id));
+  const photoIds: string[] = [];
+
+  const conversation = messages.map((m): Anthropic.MessageParam => {
+    const photos = valid(m).filter((p) => keep.has(p.id));
+    if (photos.length === 0) return { role: m.role, content: m.content || "(photo)" };
+    const blocks: Anthropic.ContentBlockParam[] = [];
+    for (const p of photos) {
+      photoIds.push(p.id);
+      blocks.push({ type: "text", text: `[Photo ${photoIds.length}]` });
+      blocks.push({ type: "image", source: { type: "base64", media_type: p.mediaType, data: p.data } });
+    }
+    blocks.push({ type: "text", text: m.content || "How can I style this?" });
+    return { role: "user", content: blocks };
+  });
+  return { conversation, photoIds };
+}
+
+/** What the shopper told us they own (their Wardrobe page), sanitized for the prompt. */
+function wardrobeBlock(items: ChatRequestBody["wardrobe"]): string {
+  if (!Array.isArray(items) || items.length === 0) return "";
+  const clean = (v: unknown, max: number) => String(v ?? "").replace(/[^\p{L}\p{N}\s,'&()/-]/gu, "").trim().slice(0, max);
+  const lines = items
+    .slice(0, 20)
+    .map((w) => [clean(w?.color, 20), clean(w?.name, 50)].filter(Boolean).join(" ") + (w?.category ? ` (${clean(w.category, 20)})` : ""))
+    .filter((l) => l.trim());
+  if (!lines.length) return "";
+  return `\n\nThings the shopper has saved as already owning: ${lines.join("; ")}. When styling or building looks, you may use these as ownedItems (no photoIndex) and mention that they already have them — only if they fit the request.`;
 }
 
 /** The weather arrives from the browser, so re-validate it before it reaches the prompt or the engine. */
@@ -118,12 +174,12 @@ export async function POST(req: NextRequest) {
     countryCode,
     liveTrends: trendData.live ? trendData.trends : null,
     weather,
+    photoIds: [],
   };
 
-  const conversation: Anthropic.MessageParam[] = (body.messages ?? []).map((m) => ({
-    role: m.role,
-    content: m.content,
-  }));
+  const built = buildConversation(Array.isArray(body.messages) ? body.messages : []);
+  const conversation = built.conversation;
+  ctx.photoIds = built.photoIds;
 
   const targetOutfit = body.targetOutfitId ? ctx.outfitsById.get(body.targetOutfitId) : undefined;
   const targetContext = targetOutfit
@@ -138,7 +194,7 @@ export async function POST(req: NextRequest) {
 
   const weatherContext = weatherPromptBlock(weather, !body.locationDenied);
 
-  const system = `${SYSTEM_PROMPT}${profileBlock(ctx.profile)}${weatherContext}${trendContext}${targetContext}`;
+  const system = `${SYSTEM_PROMPT}${profileBlock(ctx.profile)}${wardrobeBlock(body.wardrobe)}${weatherContext}${trendContext}${targetContext}`;
 
   let finalMessage = "";
   const outfitExplanations = new Map<string, string>();
