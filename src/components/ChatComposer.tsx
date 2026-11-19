@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useImperativeHandle, useRef, useState } from "react";
 import { v4 as uuid } from "uuid";
 import { ChatImage } from "@/lib/types";
 import { loadImageFile, UploadProblem, UploadProblemError } from "@/lib/image-utils";
@@ -27,14 +27,26 @@ interface SpeechRecognitionLike extends EventTarget {
   onend: (() => void) | null;
 }
 
+/** What the landing page can ask the composer to do (focus, open the photo picker, prefill text). */
+export interface ComposerHandle {
+  focus: () => void;
+  openPicker: () => void;
+  setText: (text: string) => void;
+}
+
 export function ChatComposer({
   variant,
   onSubmit,
   loading,
+  mode = "plan",
+  ref,
 }: {
   variant: "hero" | "bar";
   onSubmit: (text: string, images?: ChatImage[]) => void;
   loading?: boolean;
+  /** Landing page only: "own" shows the photo drop area and photo-oriented prompts. */
+  mode?: "plan" | "own";
+  ref?: React.Ref<ComposerHandle>;
 }) {
   const [value, setValue] = useState("");
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
@@ -43,6 +55,16 @@ export function ChatComposer({
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+
+  useImperativeHandle(ref, () => ({
+    focus: () => inputRef.current?.focus(),
+    openPicker: () => fileRef.current?.click(),
+    setText: (text: string) => {
+      setValue(text);
+      inputRef.current?.focus();
+    },
+  }));
   const [pending, setPending] = useState<ChatImage[]>([]);
   const [problem, setProblem] = useState<UploadProblem | null>(null);
 
@@ -125,39 +147,31 @@ export function ChatComposer({
           : "w-full max-w-3xl mx-auto"
       }
     >
-      {isHero && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 text-left">
-          <button
-            type="button"
-            onClick={() => inputRef.current?.focus()}
-            className="flex items-center gap-3.5 text-left rounded-2xl border border-beige-dark bg-white/90 px-4 py-3.5 hover:border-charcoal transition-colors"
-          >
-            <span className="w-11 h-11 shrink-0 rounded-full bg-beige flex items-center justify-center text-charcoal-soft">
-              <SparkleIcon />
-            </span>
-            <span>
-              <span className="block text-sm font-medium text-charcoal">Plan a look</span>
-              <span className="block text-xs text-gray">For an occasion, a trip, or today&apos;s weather</span>
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={pending.length >= 3}
-            className="relative flex items-center gap-3.5 text-left rounded-2xl border border-charcoal bg-charcoal text-ivory px-4 py-3.5 hover:bg-charcoal-soft transition-colors shadow-[0_6px_24px_rgba(21,19,15,0.18)] disabled:opacity-60"
-          >
-            <span className="w-11 h-11 shrink-0 rounded-full bg-ivory/15 flex items-center justify-center">
-              <PhotoIcon size={22} />
-            </span>
-            <span>
-              <span className="block text-sm font-medium">Style something I own</span>
-              <span className="block text-xs text-ivory/70">Upload a photo of a piece — never stored</span>
-            </span>
-            <span className="absolute -top-2 right-4 text-[10px] uppercase tracking-wide bg-accent text-ivory rounded-full px-2.5 py-0.5">
-              New
-            </span>
-          </button>
-        </div>
+      {isHero && mode === "own" && pending.length === 0 && (
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            const f = e.dataTransfer.files?.[0];
+            if (f) addPhoto(f);
+          }}
+          className={`animate-in w-full mb-4 rounded-2xl border-2 border-dashed px-6 py-9 flex flex-col items-center gap-2 transition-colors ${
+            dragging ? "border-charcoal bg-beige" : "border-beige-dark bg-white/85 hover:border-charcoal"
+          }`}
+        >
+          <span className="w-12 h-12 rounded-full bg-beige flex items-center justify-center text-charcoal-soft">
+            <PhotoIcon size={24} />
+          </span>
+          <span className="text-sm font-medium text-charcoal">Drop a photo here, or click to choose one</span>
+          <span className="text-xs text-gray">A top, skirt, jeans, jacket, shoes or a bag you already own · up to 3 photos · never stored</span>
+        </button>
       )}
       {pending.length > 0 && (
         <div className="flex gap-2 mb-2 px-1">
@@ -189,7 +203,7 @@ export function ChatComposer({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder={
-            pending.length > 0
+            pending.length > 0 || (isHero && mode === "own")
               ? "Ask about this piece — e.g. how can I style it?"
               : isHero
                 ? ROTATING_PLACEHOLDERS[placeholderIdx]
@@ -289,15 +303,6 @@ function SpinnerIcon() {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="animate-spin">
       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" />
       <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function SparkleIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 3C12.4 8 15 10.6 20 11C15 11.4 12.4 14 12 19C11.6 14 9 11.4 4 11C9 10.6 11.6 8 12 3Z" />
-      <path d="M19 17v4M17 19h4" />
     </svg>
   );
 }
