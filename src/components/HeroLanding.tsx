@@ -72,7 +72,7 @@ export function HeroLanding() {
             <ModeTab selected={mode === "plan"} onClick={choosePlan} icon={<SparkleIcon />}>
               Plan a look
             </ModeTab>
-            <ModeTab selected={mode === "own"} onClick={chooseOwn} icon={<PhotoIcon />} badge="New">
+            <ModeTab selected={mode === "own"} onClick={chooseOwn} icon={<PhotoIcon />}>
               <span className="sm:hidden">Style my piece</span>
               <span className="hidden sm:inline">Style something I own</span>
             </ModeTab>
@@ -146,13 +146,11 @@ function ModeTab({
   selected,
   onClick,
   icon,
-  badge,
   children,
 }: {
   selected: boolean;
   onClick: () => void;
   icon: React.ReactNode;
-  badge?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -167,11 +165,6 @@ function ModeTab({
     >
       <span className={`transition-colors duration-200 ${selected ? "text-accent" : ""}`}>{icon}</span>
       <span className="whitespace-nowrap">{children}</span>
-      {badge && (
-        <span className="hidden sm:inline text-[9px] uppercase tracking-[0.12em] bg-accent text-ivory rounded-full px-1.5 py-0.5 leading-none">
-          {badge}
-        </span>
-      )}
     </button>
   );
 }
