@@ -2,11 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 
 export default function SignInPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -25,13 +23,17 @@ export default function SignInPage() {
     setError(null);
     setLoading(true);
     const result = await signIn("credentials", { email, password, redirect: false });
-    setLoading(false);
     if (result?.error) {
+      setLoading(false);
       setError("That email and password don't match an account.");
       return;
     }
-    router.push("/");
-    router.refresh();
+    // A full page load, not router.push: the client router may have cached the signed-out
+    // version of "/" (which redirects back here), so a soft navigation could bounce the
+    // shopper to the sign-in page again until they clicked a second time. The button keeps
+    // its "Signing in..." state until the new page loads.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- deliberate hard navigation (stale router cache)
+    window.location.assign(`${window.location.origin}/`);
   };
 
   return (

@@ -44,8 +44,9 @@ export default function SignUpPage() {
         router.push("/sign-in");
         return;
       }
-      router.push("/");
-      router.refresh();
+      // Full page load so the shopper lands signed in (see the note in the sign-in page).
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- deliberate hard navigation (stale router cache)
+      window.location.assign(`${window.location.origin}/`);
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);
