@@ -82,7 +82,7 @@ export function WardrobeList() {
               >
                 <div
                   className="aspect-square flex items-center justify-center"
-                  style={{ background: `linear-gradient(155deg, ${hex}, ${hex}cc)` }}
+                  style={{ backgroundColor: "#ffffff", backgroundImage: `linear-gradient(155deg, ${hex}, ${hex}cc)` }}
                 >
                   <span style={{ color: fg }} className="opacity-80">
                     <CategoryIcon category={item.category} className="w-10 h-10" />

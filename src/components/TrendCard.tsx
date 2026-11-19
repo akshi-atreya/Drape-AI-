@@ -32,7 +32,7 @@ export function TrendCard({ trend }: { trend: Trend }) {
     <article className="animate-in bg-white rounded-2xl overflow-hidden border border-beige-dark/60">
       <div
         className="aspect-[16/9] flex items-end p-6"
-        style={{ background: `linear-gradient(155deg, ${trend.heroColor}, ${trend.heroColor}aa)` }}
+        style={{ backgroundColor: "#ffffff", backgroundImage: `linear-gradient(155deg, ${trend.heroColor}, ${trend.heroColor}aa)` }}
       >
         <div>
           <p className="text-white/70 text-xs uppercase tracking-wide">{trend.season}</p>

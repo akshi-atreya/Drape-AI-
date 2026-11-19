@@ -33,7 +33,7 @@ export function PieceThumb({
   return (
     <div
       className={`relative flex items-center justify-center overflow-hidden ${className}`}
-      style={{ background: `linear-gradient(155deg, ${hex} 0%, ${hex}cc 60%, ${hex}99 100%)` }}
+      style={{ backgroundColor: "#ffffff", backgroundImage: `linear-gradient(155deg, ${hex} 0%, ${hex}cc 60%, ${hex}99 100%)` }}
     >
       <span style={{ color: textOn(hex) }} className="opacity-80">
         <CategoryIcon category={product.category} className={compact ? "w-6 h-6" : "w-14 h-14"} />

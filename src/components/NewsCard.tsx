@@ -15,7 +15,7 @@ export function NewsCard({ article }: { article: NewsArticle }) {
 
   return (
     <article className="animate-in bg-white rounded-2xl overflow-hidden border border-beige-dark/60 flex flex-col">
-      <div className="aspect-[16/9]" style={{ background: `linear-gradient(155deg, ${article.heroColor}, ${article.heroColor}aa)` }} />
+      <div className="aspect-[16/9]" style={{ backgroundColor: "#ffffff", backgroundImage: `linear-gradient(155deg, ${article.heroColor}, ${article.heroColor}aa)` }} />
       <div className="p-5 space-y-2.5 flex-1 flex flex-col">
         <div className="flex items-center justify-between text-xs text-gray">
           <span className="uppercase tracking-wide">{article.category}</span>

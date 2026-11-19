@@ -39,10 +39,17 @@ html {
 }
 
 body {
-  background: var(--color-ivory);
+  background-color: var(--color-ivory);
+  /* Fine-line fashion doodles (hangers, dresses, bags, scissors...) — a seamless tile, kept faint. */
+  background-image: url("/fashion-doodles.svg");
+  background-size: 720px 720px;
   color: var(--color-charcoal);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+@media (max-width: 640px) {
+  body { background-size: 520px 520px; }
 }
 
 h1, h2, h3, .font-serif {
