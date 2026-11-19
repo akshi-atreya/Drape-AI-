@@ -135,18 +135,20 @@ function ModeCard({
       role="tab"
       aria-selected={selected}
       onClick={onClick}
-      className={`relative flex items-center gap-3.5 text-left rounded-2xl border px-4 py-3.5 transition-colors ${
+      className={`relative flex items-center gap-3.5 text-left rounded-2xl border px-4 py-3.5 transition-all duration-150 ${
         selected
-          ? "border-charcoal bg-charcoal text-ivory shadow-[0_6px_24px_rgba(21,19,15,0.18)]"
-          : "border-beige-dark bg-white/90 text-charcoal hover:border-charcoal"
+          ? // Pressed in: soft warm grey, inset shadow, nudged down — reads as already clicked.
+            "border-[#4f493f] bg-[#625c51] text-ivory translate-y-px shadow-[inset_0_3px_8px_rgba(0,0,0,0.32)]"
+          : // Raised: lifts slightly, dips when pressed.
+            "border-beige-dark bg-white/90 text-charcoal shadow-[0_2px_8px_rgba(35,34,32,0.10)] hover:border-charcoal-soft hover:-translate-y-px active:translate-y-px active:shadow-[inset_0_2px_6px_rgba(0,0,0,0.18)]"
       }`}
     >
-      <span className={`w-11 h-11 shrink-0 rounded-full flex items-center justify-center ${selected ? "bg-ivory/15" : "bg-beige text-charcoal-soft"}`}>
+      <span className={`w-11 h-11 shrink-0 rounded-full flex items-center justify-center ${selected ? "bg-black/15" : "bg-beige text-charcoal-soft"}`}>
         {icon}
       </span>
       <span>
         <span className="block text-sm font-medium">{title}</span>
-        <span className={`block text-xs ${selected ? "text-ivory/70" : "text-gray"}`}>{subtitle}</span>
+        <span className={`block text-xs ${selected ? "text-ivory/75" : "text-gray"}`}>{subtitle}</span>
       </span>
       {badge && (
         <span className="absolute -top-2 right-4 text-[10px] uppercase tracking-wide bg-accent text-ivory rounded-full px-2.5 py-0.5">
