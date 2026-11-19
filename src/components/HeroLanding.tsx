@@ -7,6 +7,12 @@ import { useAppStore } from "@/store/useAppStore";
 
 type Mode = "plan" | "own";
 
+const OWN_STEPS = [
+  { title: "Upload a piece", body: "A top, skirt, jeans, jacket, shoes or a bag you already own." },
+  { title: "I read it", body: "I spot the color and style, and can ask what else you have to wear with it." },
+  { title: "Get full looks", body: "Complete outfits built around it, with links to find the rest." },
+];
+
 const OWN_HINTS = [
   "How can I style this?",
   "What goes with this for a night out?",
@@ -24,10 +30,8 @@ export function HeroLanding() {
     setMode("plan");
     composer.current?.focus();
   };
-  const chooseOwn = () => {
-    setMode("own");
-    composer.current?.openPicker();
-  };
+  // Only switches the mode: people read what it does first, then upload in the drop box themselves.
+  const chooseOwn = () => setMode("own");
 
   return (
     <div className="relative flex-1 flex flex-col items-center justify-center px-6 py-16 md:py-20 text-center">
@@ -79,6 +83,22 @@ export function HeroLanding() {
               : "Upload a piece you own — I'll build looks around it."}
           </p>
         </div>
+
+        {mode === "own" && (
+          <ol className="animate-in mb-4 grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-left">
+            {OWN_STEPS.map((step, i) => (
+              <li key={step.title} className="flex sm:flex-col items-start gap-3 sm:gap-2 rounded-2xl bg-white/80 ring-1 ring-beige-dark/60 px-4 py-3">
+                <span className="w-6 h-6 shrink-0 rounded-full bg-beige text-accent text-xs font-medium flex items-center justify-center">
+                  {i + 1}
+                </span>
+                <span>
+                  <span className="block text-sm font-medium text-charcoal">{step.title}</span>
+                  <span className="block text-xs text-gray leading-relaxed">{step.body}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
 
         <ChatComposer
           ref={composer}
