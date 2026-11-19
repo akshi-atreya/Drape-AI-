@@ -53,23 +53,31 @@ export function HeroLanding() {
       </div>
 
       <div className="relative animate-in w-full max-w-2xl" style={{ animationDelay: "80ms" }}>
-        {/* Two ways in. The selected one is dark, and picking one changes what's shown below. */}
-        <div role="tablist" aria-label="What would you like to do?" className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 text-left">
-          <ModeCard
-            selected={mode === "plan"}
-            onClick={choosePlan}
-            icon={<SparkleIcon />}
-            title="Plan a look"
-            subtitle="For an occasion, a trip, or today's weather"
-          />
-          <ModeCard
-            selected={mode === "own"}
-            onClick={chooseOwn}
-            icon={<PhotoIcon />}
-            title="Style something I own"
-            subtitle="Upload a photo of a piece — never stored"
-            badge="New"
-          />
+        {/* Two ways in: a soft inset track with a raised pill that slides to the chosen option. */}
+        <div className="mx-auto mb-3 w-full max-w-md">
+          <div
+            role="tablist"
+            aria-label="What would you like to do?"
+            className="relative grid grid-cols-2 rounded-full bg-beige/80 p-1.5 shadow-[inset_0_1px_4px_rgba(35,34,32,0.14)] ring-1 ring-beige-dark/50"
+          >
+            <span
+              aria-hidden
+              className="absolute top-1.5 bottom-1.5 left-1.5 w-[calc(50%-0.375rem)] rounded-full bg-white shadow-[0_3px_12px_rgba(35,34,32,0.16),0_0_0_1px_rgba(216,198,168,0.55)] transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+              style={{ transform: mode === "own" ? "translateX(100%)" : "translateX(0)" }}
+            />
+            <ModeTab selected={mode === "plan"} onClick={choosePlan} icon={<SparkleIcon />}>
+              Plan a look
+            </ModeTab>
+            <ModeTab selected={mode === "own"} onClick={chooseOwn} icon={<PhotoIcon />} badge="New">
+              <span className="sm:hidden">Style my piece</span>
+              <span className="hidden sm:inline">Style something I own</span>
+            </ModeTab>
+          </div>
+          <p className="mt-3 text-sm text-charcoal-soft min-h-[1.25rem]" aria-live="polite">
+            {mode === "plan"
+              ? "For an occasion, a trip, or today's weather."
+              : "Upload a piece you own — I'll build looks around it."}
+          </p>
         </div>
 
         <ChatComposer
@@ -114,20 +122,18 @@ export function HeroLanding() {
   );
 }
 
-function ModeCard({
+function ModeTab({
   selected,
   onClick,
   icon,
-  title,
-  subtitle,
   badge,
+  children,
 }: {
   selected: boolean;
   onClick: () => void;
   icon: React.ReactNode;
-  title: string;
-  subtitle: string;
   badge?: string;
+  children: React.ReactNode;
 }) {
   return (
     <button
@@ -135,23 +141,14 @@ function ModeCard({
       role="tab"
       aria-selected={selected}
       onClick={onClick}
-      className={`relative flex items-center gap-3.5 text-left rounded-2xl border px-4 py-3.5 transition-all duration-150 ${
-        selected
-          ? // Pressed in: soft warm grey, inset shadow, nudged down — reads as already clicked.
-            "border-[#4f493f] bg-[#625c51] text-ivory translate-y-px shadow-[inset_0_3px_8px_rgba(0,0,0,0.32)]"
-          : // Raised: lifts slightly, dips when pressed.
-            "border-beige-dark bg-white/90 text-charcoal shadow-[0_2px_8px_rgba(35,34,32,0.10)] hover:border-charcoal-soft hover:-translate-y-px active:translate-y-px active:shadow-[inset_0_2px_6px_rgba(0,0,0,0.18)]"
+      className={`relative z-10 flex items-center justify-center gap-2 rounded-full px-3 py-3 text-sm font-medium transition-colors duration-200 ${
+        selected ? "text-charcoal" : "text-gray hover:text-charcoal-soft"
       }`}
     >
-      <span className={`w-11 h-11 shrink-0 rounded-full flex items-center justify-center ${selected ? "bg-black/15" : "bg-beige text-charcoal-soft"}`}>
-        {icon}
-      </span>
-      <span>
-        <span className="block text-sm font-medium">{title}</span>
-        <span className={`block text-xs ${selected ? "text-ivory/75" : "text-gray"}`}>{subtitle}</span>
-      </span>
+      <span className={`transition-colors duration-200 ${selected ? "text-accent" : ""}`}>{icon}</span>
+      <span className="whitespace-nowrap">{children}</span>
       {badge && (
-        <span className="absolute -top-2 right-4 text-[10px] uppercase tracking-wide bg-accent text-ivory rounded-full px-2.5 py-0.5">
+        <span className="hidden sm:inline text-[9px] uppercase tracking-[0.12em] bg-accent text-ivory rounded-full px-1.5 py-0.5 leading-none">
           {badge}
         </span>
       )}
@@ -161,7 +158,7 @@ function ModeCard({
 
 function SparkleIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 3C12.4 8 15 10.6 20 11C15 11.4 12.4 14 12 19C11.6 14 9 11.4 4 11C9 10.6 11.6 8 12 3Z" />
       <path d="M19 17v4M17 19h4" />
     </svg>
@@ -170,7 +167,7 @@ function SparkleIcon() {
 
 function PhotoIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <circle cx="9" cy="10" r="1.6" />
       <path d="M21 16l-5-5-8 8" />
