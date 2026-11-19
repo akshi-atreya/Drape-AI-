@@ -99,7 +99,7 @@ export function TrendCard({ trend }: { trend: Trend }) {
               ))}
             </div>
             <p className="text-xs text-gray">
-              Tap one to search for it, or ask FitCast AI to build a whole look around this trend.
+              Tap one to search for it, or ask DrapePal to build a whole look around this trend.
             </p>
           </div>
         )}

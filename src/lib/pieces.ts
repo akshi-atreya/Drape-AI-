@@ -2,7 +2,7 @@ import { Product } from "@/lib/types";
 import { isOwnedProduct } from "@/lib/owned-items";
 
 /**
- * FitCast AI recommends garment *types* — "a charcoal satin blouse, cropped
+ * DrapePal recommends garment *types* — "a charcoal satin blouse, cropped
  * cut" — never a specific retailer SKU. These helpers turn the internal
  * archetype record the engine ranks into the human description shown in
  * the UI, used for search links, and fed to the try-on model.

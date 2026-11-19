@@ -41,7 +41,7 @@ export default function SignInPage() {
       <div className="animate-in w-full max-w-sm">
         <div className="text-center mb-10">
           <Link href="/" className="font-serif text-2xl tracking-tight">
-            FitCast AI
+            DrapePal
           </Link>
           <h1 className="font-serif text-3xl mt-6">Welcome back</h1>
           <p className="text-charcoal-soft text-sm mt-2">Sign in to talk to your stylist.</p>
@@ -97,7 +97,7 @@ export default function SignInPage() {
 
         {userCount != null && userCount > 0 && (
           <p className="text-center text-xs text-gray mt-10">
-            {userCount.toLocaleString()} {userCount === 1 ? "person has" : "people have"} joined FitCast AI.
+            {userCount.toLocaleString()} {userCount === 1 ? "person has" : "people have"} joined DrapePal.
           </p>
         )}
       </div>

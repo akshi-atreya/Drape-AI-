@@ -1,6 +1,6 @@
-# FitCast AI — your AI fashion suggestion friend
+# DrapePal — your AI fashion suggestion friend
 
-Chat with an AI stylist about an occasion. FitCast AI designs complete looks
+Chat with an AI stylist about an occasion. DrapePal designs complete looks
 made of piece *types* ("a charcoal blouse, cropped cut") that fit the weather
 where you are and what's trending right now, shows one illustrative image of
 the look, and then shows the whole outfit on you with virtual try-on.

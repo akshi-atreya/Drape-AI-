@@ -22,7 +22,7 @@ export default async function TrendsPage() {
           </p>
           <p className="text-xs text-gray">
             {live && updatedAt
-              ? `Updated ${new Date(updatedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} from ${outlets.join(", ")}. Trend summaries are written by FitCast AI; articles link back to the original.`
+              ? `Updated ${new Date(updatedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} from ${outlets.join(", ")}. Trend summaries are written by DrapePal; articles link back to the original.`
               : refreshing
                 ? "Fresh trends from this week's fashion coverage are being prepared — refresh in about a minute. Showing our curated edit for now."
                 : "Live trend feed unavailable right now — showing our curated edit."}
